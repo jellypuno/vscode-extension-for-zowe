@@ -91,8 +91,8 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(err.message); // TODO MISSED TESTING
     }
 
-    await initializeFavorites(datasetProvider);
-    await ussActions.initializeUSSFavorites(ussFileProvider);
+    await datasetProvider.initializeFavorites(log);
+    await ussFileProvider.initializeUSSFavorites(log);
 
     if (datasetProvider) {
         // Attaches the TreeView as a subscriber to the refresh event of datasetProvider
@@ -120,7 +120,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("zowe.addFavorite", async (node) => datasetProvider.addFavorite(node));
     vscode.commands.registerCommand("zowe.refreshAll", () => refreshAll(datasetProvider));
     vscode.commands.registerCommand("zowe.refreshNode", (node) => refreshPS(node));
-    vscode.commands.registerCommand("zowe.pattern", (node) => enterPattern(node, datasetProvider));
+    vscode.commands.registerCommand("zowe.pattern", (node) => datasetProvider.retrieveHistory(node, log));
     vscode.commands.registerCommand("zowe.ZoweNode.openPS", (node) => openPS(node));
     vscode.workspace.onDidSaveTextDocument(async (savedFile) => {
         log.debug(localize("onDidSaveTextDocument1",
@@ -154,13 +154,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("zowe.submitMember", async (node) => submitMember(node));
     vscode.commands.registerCommand("zowe.showDSAttributes", (node) => showDSAttributes(node, datasetProvider));
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration("Zowe-Persistent-Favorites")) {
-            const setting: any = { ...vscode.workspace.getConfiguration().get("Zowe-Persistent-Favorites") };
-            if (!setting.persistence) {
-                setting.favorites = [];
-                await vscode.workspace.getConfiguration().update("Zowe-Persistent-Favorites", setting, vscode.ConfigurationTarget.Global); // MISSED
-            }
-        }
+        datasetProvider.onDidChangeConfiguration(e);
     });
 
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -183,7 +177,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("zowe.uss.refreshAll", () => ussActions.refreshAllUSS(ussFileProvider));
     vscode.commands.registerCommand("zowe.uss.refreshUSS", (node) => refreshUSS(node));
     vscode.commands.registerCommand("zowe.uss.safeSaveUSS", async (node) => safeSaveUSS(node));
-    vscode.commands.registerCommand("zowe.uss.fullPath", (node) => enterUSSPattern(node, ussFileProvider));
+    vscode.commands.registerCommand("zowe.uss.fullPath", (node) => ussFileProvider.enterUSSPattern(node, log));
     vscode.commands.registerCommand("zowe.uss.ZoweUSSNode.open", (node) => openUSS(node));
     vscode.commands.registerCommand("zowe.uss.removeSession", async (node) => ussFileProvider.deleteSession(node));
     vscode.commands.registerCommand("zowe.uss.createFile", async (node) => ussActions.createUSSNode(node, ussFileProvider, "file"));
@@ -196,15 +190,8 @@ export async function activate(context: vscode.ExtensionContext) {
         async (node) => ussActions.renameUSSNode(node, ussFileProvider, getUSSDocumentFilePath(node)));
     vscode.commands.registerCommand("zowe.uss.uploadDialog", async (node) => ussActions.uploadDialog(node, ussFileProvider));
     vscode.commands.registerCommand("zowe.uss.createNode", async (node) => ussActions.createUSSNodeDialog(node, ussFileProvider));
-
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-        if (e.affectsConfiguration("Zowe-USS-Persistent-Favorites")) {
-            const ussSetting: any = { ...vscode.workspace.getConfiguration().get("Zowe-USS-Persistent-Favorites") };
-            if (!ussSetting.persistence) {
-                ussSetting.favorites = [];
-                await vscode.workspace.getConfiguration().update("Zowe-USS-Persistent-Favorites", ussSetting, vscode.ConfigurationTarget.Global);
-            }
-        }
+        ussFileProvider.onDidChangeConfiguration(e);
     });
 
     // JES
@@ -995,43 +982,7 @@ export async function enterPattern(node: ZoweNode, datasetProvider: DatasetTree)
     node.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     node.dirty = true;
     node.iconPath = utils.applyIcons(node, "open");
-    datasetProvider.refresh();
-}
-
-/**
- * Prompts the user for a path, and populates the [TreeView]{@link vscode.TreeView} based on the path
- *
- * @param {ZoweUSSNode} node - The session node
- * @param {ussTree} ussFileProvider - Current ussTree used to populate the TreeView
- * @returns {Promise<void>}
- */
-export async function enterUSSPattern(node: ZoweUSSNode, ussFileProvider: USSTree) {
-    log.debug(localize("enterUSSPattern.log.debug.promptUSSPath", "Prompting the user for a USS path"));
-    let remotepath: string;
-    // manually entering a search
-    const options: vscode.InputBoxOptions = {
-        prompt: localize("enterUSSPattern.option.prompt.search", "Search Unix System Services (USS) by entering a path name starting with a /"),
-        value: node.fullPath
-    };
-    // get user input
-    remotepath = await vscode.window.showInputBox(options);
-    if (!remotepath) {
-        vscode.window.showInformationMessage(localize("enterUSSPattern.enterPath", "You must enter a path."));
-        return;
-    }
-
-    // Sanitization: Replace multiple preceding forward slashes with just one forward slash
-    const sanitizedPath = remotepath.replace(/\/\/+/, "/");
-    node.tooltip = node.fullPath = sanitizedPath;
-    node.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-    node.iconPath = utils.applyIcons(node, "open");
-    // update the treeview with the new path
-    // TODO figure out why a label change is needed to refresh the treeview,
-    // instead of changing the collapsible state
-    // change label so the treeview updates
-    node.label = `${node.mProfileName} [${sanitizedPath}]`;
-    node.dirty = true;
-    ussFileProvider.refresh();
+    datasetProvider.addHistory(node.pattern);
 }
 
 /**
@@ -1134,47 +1085,7 @@ export function getUSSDocumentFilePath(node: ZoweUSSNode) {
  * @export
  * @param {DatasetTree} datasetProvider
  */
-export async function initializeFavorites(datasetProvider: DatasetTree) {
-    log.debug(localize("initializeFavorites.log.debug", "initializing favorites"));
-    const lines: string[] = vscode.workspace.getConfiguration("Zowe-Persistent-Favorites").get("favorites");
-    for (const line of lines) {
-        if (line === "") {
-            continue;
-        }
-        // validate line
-        const favoriteDataSetPattern = /^\[.+\]\:\s[a-zA-Z#@\$][a-zA-Z0-9#@\$\-]{0,7}(\.[a-zA-Z#@\$][a-zA-Z0-9#@\$\-]{0,7})*\{p?ds\}$/;
-        const favoriteSearchPattern = /^\[.+\]\:\s.*\{session\}$/;
-        if (favoriteDataSetPattern.test(line)) {
-            const sesName = line.substring(1, line.lastIndexOf("]")).trim();
-            const zosmfProfile = loadNamedProfile(sesName);
-            const session = zowe.ZosmfSession.createBasicZosmfSession(zosmfProfile.profile);
-            let node: ZoweNode;
-            if (line.substring(line.indexOf("{") + 1, line.lastIndexOf("}")) === "pds") {
-                node = new ZoweNode(line.substring(0, line.indexOf("{")), vscode.TreeItemCollapsibleState.Collapsed,
-                    datasetProvider.mFavoriteSession, session);
-            } else {
-                node = new ZoweNode(line.substring(0, line.indexOf("{")), vscode.TreeItemCollapsibleState.None,
-                    datasetProvider.mFavoriteSession, session);
-                node.command = { command: "zowe.ZoweNode.openPS", title: "", arguments: [node] };
-            }
-            node.contextValue += "f";
-            node.iconPath = utils.applyIcons(node);
-            datasetProvider.mFavorites.push(node);
-        } else if (favoriteSearchPattern.test(line)) {
-            const node = new ZoweNode(line.substring(0, line.lastIndexOf("{")),
-                vscode.TreeItemCollapsibleState.None, datasetProvider.mFavoriteSession, null);
-            node.command = { command: "zowe.pattern", title: "", arguments: [node] };
-            const light = path.join(__dirname, "..", "..", "resources", "light", "pattern.svg");
-            const dark = path.join(__dirname, "..", "..", "resources", "dark", "pattern.svg");
-            node.iconPath = { light, dark };
-            node.contextValue = "sessionf";
-            node.iconPath = utils.applyIcons(node);
-            datasetProvider.mFavorites.push(node);
-        } else {
-            vscode.window.showErrorMessage(localize("initializeFavorites.fileCorrupted", "Favorites file corrupted: ") + line);
-        }
-    }
-}
+
 
 /**
  * Downloads and displays a PS in a text editor view

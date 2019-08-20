@@ -70,6 +70,7 @@
     "deleteDataSet.notFound.error2": " was probably already deleted.",
     "enterPattern.log.debug.prompt": "Prompting the user for a data set pattern",
     "enterPattern.options.prompt": "Search data sets by entering patterns: use a comma to separate multiple patterns",
+    "searchHistory.options.prompt": "Choose -- Specify Filter -- to define a new filter or select a previously defined one",
     "enterPattern.pattern": "You must enter a pattern.",
     "enterUSSPattern.log.debug.promptUSSPath": "Prompting the user for a USS path",
     "enterUSSPattern.option.prompt.search": "Search Unix System Services (USS) by entering a path name starting with a /",

@@ -49,17 +49,23 @@ describe("Unit Tests (Jest)", () => {
         })
     });
     const getConfiguration = jest.fn();
-    Object.defineProperty(vscode.workspace, "getConfiguration", {
-        value:
-            jest.fn(()=>{
-                return {
-                    get: jest.fn(()=>{
-                        return {};
-                    })
-                };
-            })
+    // Object.defineProperty(vscode.workspace, "getConfiguration", {
+    //     value:
+    //         jest.fn(()=>{
+    //             return {
+    //                 get: jest.fn(()=>{
+    //                     return {};
+    //                 })
+    //             };
+    //         })
+    // });
+    Object.defineProperty(vscode.workspace, "getConfiguration", { value: getConfiguration });
+    getConfiguration.mockReturnValue({
+        get: (setting: string) => [
+            "[test]: /u/aDir{directory}",
+            "[test]: /u/myFile.txt{textFile}",
+        ]
     });
-
 
     const testTree = new USSTree();
     testTree.mSessionNodes.push(new ZoweUSSNode("testSess", vscode.TreeItemCollapsibleState.Collapsed, null, session, null));
@@ -275,5 +281,36 @@ describe("Unit Tests (Jest)", () => {
         expect(JSON.stringify(folder.iconPath)).toContain("folder.svg");
         await testTree.flipState(folder, true);
         expect(JSON.stringify(folder.iconPath)).toContain("folder-open.svg");
+    });
+
+
+    it("initializeUSSFavorites is executed successfully", async () => {
+        getConfiguration.mockReturnValueOnce({
+            get: (setting: string) => [
+                "[test]: /u/aDir{directory}",
+                "[test]: /u/myFile.txt{textFile}",
+            ]
+        });
+        // const testUSSTree = new USSTree();
+        // createBasicZosmfSession.mockReturnValue(session);
+        spyOn(utils, "getSession").and.returnValue(session);
+        await testTree.initializeUSSFavorites(Logger.getAppLogger());
+        expect(testTree.mFavorites.length).toBe(2);
+
+        const expectedUSSFavorites: ZoweUSSNode[] = [
+            new ZoweUSSNode("/u/aDir", vscode.TreeItemCollapsibleState.Collapsed, undefined, session, "",
+                false, "test"),
+            new ZoweUSSNode("/u/myFile.txt", vscode.TreeItemCollapsibleState.None, undefined, session, "",
+                false, "test"),
+        ];
+
+        expectedUSSFavorites.map((node) => node.contextValue += "f");
+        expectedUSSFavorites.forEach((node) => {
+            if (node.contextValue !== "directoryf") {
+                node.command = { command: "zowe.uss.ZoweUSSNode.open", title: "Open", arguments: [node] };
+            }
+        });
+        expect(testTree.mFavorites[0].fullPath).toEqual("/u/aDir");
+        expect(testTree.mFavorites[1].label).toEqual("[test]: myFile.txt");
     });
 });

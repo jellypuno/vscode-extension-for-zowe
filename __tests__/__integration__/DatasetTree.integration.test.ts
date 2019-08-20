@@ -37,7 +37,7 @@ describe("DatasetTree Integration Tests", async () => {
     testTree.mSessionNodes.splice(-1, 0, sessNode);
     const oldSettings = vscode.workspace.getConfiguration("Zowe-Persistent-Favorites");
 
-    after(async () => {
+    afterEach(async () => {
         await vscode.workspace.getConfiguration().update("Zowe-Persistent-Favorites", oldSettings, vscode.ConfigurationTarget.Global);
     });
 
@@ -168,32 +168,32 @@ describe("DatasetTree Integration Tests", async () => {
         expect(testTree.mSessionNodes.length).toEqual(len + 1);
     }).timeout(TIMEOUT);
 
-    describe("addFavorite()", () => {
-        it("should add the selected data set to the treeView", async () => {
-            const favoriteNode = new ZoweNode(pattern + ".TPDS", vscode.TreeItemCollapsibleState.Collapsed, sessNode, null);
-            const len = testTree.mFavorites.length;
-            await testTree.addFavorite(favoriteNode);
-            const filtered = testTree.mFavorites.filter((temp) => temp.label ===
-                `[${favoriteNode.getSessionNode().label}]: ${favoriteNode.label}`);
-            expect(filtered.length).toEqual(len + 1);
+    it("should add the selected data set to the treeView and persist it", async () => {
+        testTree.initializeFavorites(Logger.getAppLogger());
+        const favoriteNode = new ZoweNode(pattern + ".TPDS", vscode.TreeItemCollapsibleState.Collapsed, sessNode, null);
+        const len = testTree.mFavorites.length;
+        await testTree.addFavorite(favoriteNode);
+        const filtered = testTree.mFavorites.filter((temp) => temp.label ===
+            `[${favoriteNode.getSessionNode().label}]: ${favoriteNode.label}`);
+        expect(filtered.length).toEqual(1);
 
-            const favorites: string[] = vscode.workspace.getConfiguration("Zowe-Persistent-Favorites").get("favorites");
-            expect(favorites.find((fav) => fav === `[${favoriteNode.getSessionNode().label}]: ${favoriteNode.label}{pds}`)).toBeDefined();
+        await testTree.initializeFavorites(Logger.getAppLogger());
+        expect(testTree.mFavorites.find((fav) => fav.label === `[${favoriteNode.getSessionNode().label}]: ${favoriteNode.label}`)).toBeDefined();
 
-            testTree.mFavorites = [];
-        });
-
-        it("should add a favorite search", async () => {
-            await testTree.addFavorite(sessNode);
-            const filtered = testTree.mFavorites.filter((temp) => temp.label === `[${sessNode.label}]: ${sessNode.pattern}`);
-            expect(filtered.length).toEqual(1);
-
-            const favorites: string[] = vscode.workspace.getConfiguration("Zowe-Persistent-Favorites").get("favorites");
-            expect(favorites.find((fav) => fav === `[${sessNode.label}]: ${sessNode.pattern}{session}`)).toBeDefined();
-
-            testTree.mFavorites = [];
-        });
+        testTree.mFavorites = [];
     });
+
+    it("should add a favorite search", async () => {
+        await testTree.initializeFavorites(Logger.getAppLogger());
+        await testTree.addFavorite(sessNode);
+        const filtered = testTree.mFavorites.filter((temp) => temp.label === `[${sessNode.label}]: ${sessNode.pattern}`);
+        expect(filtered.length).toEqual(1);
+        await testTree.initializeFavorites(Logger.getAppLogger());
+        expect(testTree.mFavorites.find((fav) => fav.label === `[${sessNode.label}]: ${sessNode.pattern}`)).toBeDefined();
+
+        testTree.mFavorites = [];
+    });
+
 
     describe("removeFavorite()", () => {
         it("should remove the selected favorite data set from the treeView", () => {

@@ -28,6 +28,7 @@ const mockUSSRefresh = jest.fn();
 const mockUSSRefreshElement = jest.fn();
 const mockGetUSSChildren = jest.fn();
 const mockRemoveUSSFavorite = jest.fn();
+const mockInitializeFavorites = jest.fn();
 const showInputBox = jest.fn();
 const showErrorMessage = jest.fn();
 const showQuickPick = jest.fn();
@@ -56,7 +57,8 @@ function getUSSTree() {
             refresh: mockUSSRefresh,
             refreshElement: mockUSSRefreshElement,
             getChildren: mockGetUSSChildren,
-            removeUSSFavorite: mockRemoveUSSFavorite
+            removeUSSFavorite: mockRemoveUSSFavorite,
+            initializeUSSFavorites: mockInitializeFavorites
         };
     });
     const testUSSTree1 = USSTree();
@@ -135,35 +137,7 @@ describe("ussNodeActions", () => {
             expect(testUSSTree.refresh).not.toHaveBeenCalled();
         });
     });
-    describe("initializingUSSFavorites", () => {
-        it("initializeUSSFavorites is executed successfully", async () => {
-            getConfiguration.mockReturnValueOnce({
-                get: (setting: string) => [
-                    "[test]: /u/aDir{directory}",
-                    "[test]: /u/myFile.txt{textFile}",
-                ]
-            });
-            // createBasicZosmfSession.mockReturnValue(session);
-            spyOn(utils, "getSession").and.returnValue(session);
-            await ussNodeActions.initializeUSSFavorites(testUSSTree);
-            expect(testUSSTree.mFavorites.length).toBe(2);
 
-            const expectedUSSFavorites: ZoweUSSNode[] = [
-                new ZoweUSSNode("/u/aDir", vscode.TreeItemCollapsibleState.Collapsed, undefined, session, "",
-                    false, "test"),
-                new ZoweUSSNode("/u/myFile.txt", vscode.TreeItemCollapsibleState.None, undefined, session, "",
-                    false, "test"),
-            ];
-
-            expectedUSSFavorites.map((node) => node.contextValue += "f");
-            expectedUSSFavorites.forEach((node) => {
-                if (node.contextValue !== "directoryf") {
-                    node.command = { command: "zowe.uss.ZoweUSSNode.open", title: "Open", arguments: [node] };
-                }
-            });
-            expect(testUSSTree.mFavorites).toEqual(expectedUSSFavorites);
-        });
-    });
     describe("renameUSSNode", () => {
         it("should exit if blank input is provided", () => {
             showInputBox.mockReturnValueOnce("");
