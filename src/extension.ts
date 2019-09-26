@@ -29,6 +29,7 @@ import { loadNamedProfile, loadAllProfiles } from "./ProfileLoader";
 import * as nls from "vscode-nls";
 import * as utils from "./utils";
 import SpoolProvider, { encodeJobFile } from "./SpoolProvider";
+import { createNewConnection } from "./CreateConnection";
 const localize = nls.config({ messageFormat: nls.MessageFormat.file })();
 
 
@@ -248,7 +249,9 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("zowe.zosJobsOpenspool", (session, spool) => {
         getSpoolContent(session, spool);
     });
-    vscode.commands.registerCommand("zowe.deleteJob", (job) => jobsProvider.deleteJob(job));
+    vscode.commands.registerCommand("zowe.deleteJob", (job) => {
+        deleteJob(job);
+    });
     vscode.commands.registerCommand("zowe.runModifyCommand", (job) => {
         modifyCommand(job);
     });
@@ -579,6 +582,7 @@ export async function submitMember(node: ZoweNode) {
  */
 export async function addSession(datasetProvider: DatasetTree) {
     let allProfiles;
+    const createNewProfile = "Click to create a new profile";
     try {
         allProfiles = loadAllProfiles();
     } catch (err) {
@@ -597,26 +601,32 @@ export async function addSession(datasetProvider: DatasetTree) {
                 sessionNode.label.trim() === profileName
             )
         );
-    } else {
-        vscode.window.showInformationMessage(localize("addSession.noProfile", "No profiles detected"));
-        return;
     }
-    if (profileNamesList.length > 0) {
-        const quickPickOptions: vscode.QuickPickOptions = {
-            placeHolder: localize("addSession.quickPickOption", "Select a Profile to Add to the Data Set Explorer"),
-            ignoreFocusOut: true,
-            canPickMany: false
-        };
-        const chosenProfile = await vscode.window.showQuickPick(profileNamesList, quickPickOptions);
-        if (chosenProfile) {
-            log.debug(localize("addSession.log.debug.selectedProfile", "User selected profile ") + chosenProfile);
-            await datasetProvider.addSession(log, chosenProfile);
-        } else {
-            log.debug(localize("addSession.log.debug.cancelledSelection", "User cancelled profile selection"));
-        }
+    // } else {
+    //     vscode.window.showInformationMessage(localize("addSession.noProfile", "No profiles detected"));
+    //     // return;
+    // }
+    // if (profileNamesList.length > 0) {
+    const quickPickOptions: vscode.QuickPickOptions = {
+        placeHolder: localize("addSession.quickPickOption",
+        "Choose \"Create new...\" to define a new profile alternatively select an exiting profile to Add to the Data Set Explorer"),
+        ignoreFocusOut: true,
+        canPickMany: false
+    };
+    profileNamesList.unshift(createNewProfile);
+    const chosenProfile = await vscode.window.showQuickPick(profileNamesList, quickPickOptions);
+    if (chosenProfile === createNewProfile) {
+        log.debug(localize("addSession.log.debug.createNewProfile", "User created a new profile"));
+        await createNewConnection();
+    } else if(chosenProfile) {
+        log.debug(localize("addSession.log.debug.selectedProfile", "User selected profile ") + chosenProfile);
+        await datasetProvider.addSession(log, chosenProfile);
     } else {
-        vscode.window.showInformationMessage(localize("addSession.noProfilesAdd", "No more profiles to add"));
+        log.debug(localize("addSession.log.debug.cancelledSelection", "User cancelled profile selection"));
     }
+    // } else {
+    //     vscode.window.showInformationMessage(localize("addSession.noProfilesAdd", "No more profiles to add"));
+    // }
 }
 
 /**
@@ -1509,6 +1519,17 @@ export async function stopCommand(job: Job) {
     try {
         const response = await zowe.IssueCommand.issueSimple(job.session, `p ${job.job.jobname}`);
         vscode.window.showInformationMessage(localize("stopCommand.response", "Command response: ") + response.commandResponse);
+    } catch (error) {
+        vscode.window.showErrorMessage(error.message);
+    }
+}
+
+export async function deleteJob(job: Job) {
+    try {
+        await zowe.DeleteJobs.deleteJob(job.session, job.job.jobname, job.job.jobid);
+        vscode.window.showInformationMessage(localize("deleteJob.job", "Job ") + job.job.jobname + "(" + job.job.jobid + ")" +
+        localize("deleteJob.delete", " deleted"));
+
     } catch (error) {
         vscode.window.showErrorMessage(error.message);
     }
