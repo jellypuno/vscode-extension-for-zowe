@@ -10,5 +10,6 @@ issues:
 # issues with these labels will be considered. Set to `[]` to disable for issues
   labels:
     - theia
+    - bug
 # Customize a comment to post on an issue. Comment out to use the default
 #  comment:
