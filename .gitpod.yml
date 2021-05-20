@@ -1,0 +1,18 @@
+tasks:
+  - init: yarn && yarn build
+  - command: npm i -g @zowe/cli
+    name: Install Zowe CLI
+  - command: zowe plugins install @broadcom/endevor-for-zowe-cli
+
+vscode:
+  extensions:
+    - zowe.vscode-extension-for-zowe
+    - zowe.zowe-explorer-ftp-extension
+    - broadcommfd.code4z-extension-pack
+    - eamodio.gitlens
+    - eg2.vscode-npm-script
+    - christian-kohler.npm-intellisense
+    - esbenp.prettier-vscode
+    - visualstudioexptteam.vscodeintellicode
+    - dbaeumer.vscode-eslint
+    - orta.vscode-jest
