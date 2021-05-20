@@ -1,9 +1,10 @@
 tasks:
   - init: yarn && yarn build
-  - command: sudo npm i -g @zowe/cli
+  - command: npm i -g @zowe/cli
     name: Install Zowe CLI
 
 vscode:
   extensions:
     - zowe.vscode-extension-for-zowe
     - zowe.zowe-explorer-ftp-extension
+    - broadcommfd.code4z-extension-pack
