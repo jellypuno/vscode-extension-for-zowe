@@ -1,9 +1,9 @@
 tasks:
   - before: yarn && yarn build
     init: npm i -g @zowe/cli
-    command: zowe plugins install @zowe/zos-ftp-for-zowe-cli
-    command: zowe plugins install @broadcom/endevor-bridge-for-git-for-zowe-cli
-    command: zowe plugins install @broadcom/endevor-for-zowe-cli
+    command: zowe plugins install @zowe/zos-ftp-for-zowe-cli &&
+             zowe plugins install @broadcom/endevor-bridge-for-git-for-zowe-cli &&
+             zowe plugins install @broadcom/endevor-for-zowe-cli
 vscode:
   extensions:
     - zowe.vscode-extension-for-zowe
