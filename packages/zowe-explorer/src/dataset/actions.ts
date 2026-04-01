@@ -32,7 +32,7 @@ import { Profiles } from "../Profiles";
 import { getIconByNode } from "../generators/icons";
 import { ZoweDatasetNode } from "./ZoweDatasetNode";
 import * as contextually from "../shared/context";
-import { markDocumentUnsaved, setFileSaved } from "../utils/workspace";
+import { markDocumentUnsaved, setFileSaved, closeOpenedTextFile } from "../utils/workspace";
 import { IUploadOptions } from "@zowe/zos-files-for-zowe-sdk";
 import { ZoweLogger } from "../utils/LoggerUtils";
 import { ProfileManagement } from "../utils/ProfileManagement";
@@ -1165,8 +1165,11 @@ export async function deleteDataset(node: api.IZoweTreeNode, datasetProvider: ap
 
     datasetProvider.refreshElement(node.getSessionNode());
 
-    // remove local copy of file
+    // Close the editor if the deleted dataset is open
     const fileName = getDocumentFilePath(label, node);
+    await closeOpenedTextFile(fileName);
+
+    // remove local copy of file
     try {
         if (fs.existsSync(fileName)) {
             fs.unlinkSync(fileName);

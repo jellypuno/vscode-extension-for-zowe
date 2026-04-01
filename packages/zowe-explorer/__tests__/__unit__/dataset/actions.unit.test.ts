@@ -12,6 +12,7 @@
 import * as vscode from "vscode";
 import * as zowe from "@zowe/cli";
 import { Gui, ValidProfileEnum } from "@zowe/zowe-explorer-api";
+import * as workspaceUtils from "../../../src/utils/workspace";
 import {
     createSessCfgFromArgs,
     createInstanceOfProfile,
@@ -732,6 +733,7 @@ describe("Dataset Actions Unit Tests - Function deleteDataset", () => {
         createGlobalMocks();
         const blockMocks = createBlockMocks();
         mocked(Profiles.getInstance).mockReturnValue(blockMocks.profileInstance);
+        const closeTextFileSpy = jest.spyOn(workspaceUtils, "closeOpenedTextFile").mockResolvedValue(true);
         const node = new ZoweDatasetNode({
             label: "HLQ.TEST.NODE",
             collapsibleState: vscode.TreeItemCollapsibleState.None,
@@ -746,6 +748,7 @@ describe("Dataset Actions Unit Tests - Function deleteDataset", () => {
         await dsActions.deleteDataset(node, blockMocks.testDatasetTree);
 
         expect(deleteSpy).toBeCalledWith(node.label, { responseTimeout: blockMocks.imperativeProfile.profile?.responseTimeout });
+        expect(closeTextFileSpy).toHaveBeenCalled();
         expect(mocked(fs.existsSync)).toBeCalledWith(path.join(globals.DS_DIR, node.getSessionNode().label.toString(), node.label.toString()));
         expect(mocked(fs.unlinkSync)).toBeCalledWith(path.join(globals.DS_DIR, node.getSessionNode().label.toString(), node.label.toString()));
     });
