@@ -11,7 +11,7 @@
 
 import * as extension from "../../src/extension";
 import * as vscode from "vscode";
-import { Gui } from "@zowe/zowe-explorer-api";
+import { AuthHandler, Gui } from "@zowe/zowe-explorer-api";
 import { ZoweVsCodeExtension } from "../../__mocks__/@zowe/zowe-explorer-api";
 
 describe("Extension Unit Tests - function registerFtpApis", () => {
@@ -19,7 +19,7 @@ describe("Extension Unit Tests - function registerFtpApis", () => {
         jest.clearAllMocks();
     });
 
-    it("should register the ftp API's", async () => {
+    it("should register the ftp API's", () => {
         const registerUssApiMock = jest.fn();
         const registerJesApiMock = jest.fn();
         const registerMvsApiMock = jest.fn();
@@ -34,6 +34,8 @@ describe("Extension Unit Tests - function registerFtpApis", () => {
             }),
         });
 
+        const enableLocksForTypeSpy = jest.spyOn(AuthHandler, "enableLocksForType");
+
         jest.spyOn(Gui, "showMessage").mockImplementation();
         expect(
             extension.activate({
@@ -41,12 +43,16 @@ describe("Extension Unit Tests - function registerFtpApis", () => {
                 extensionPath: "./test",
             } as unknown as vscode.ExtensionContext)
         ).toEqual(undefined);
-        expect(registerUssApiMock).toBeCalledTimes(1);
-        expect(registerMvsApiMock).toBeCalledTimes(1);
-        expect(registerJesApiMock).toBeCalledTimes(1);
+        expect(registerUssApiMock).toHaveBeenCalledTimes(1);
+        expect(registerMvsApiMock).toHaveBeenCalledTimes(1);
+        expect(registerJesApiMock).toHaveBeenCalledTimes(1);
+
+        // Verify locks are enabled for FTP profile types
+        expect(enableLocksForTypeSpy).toHaveBeenCalledTimes(1);
+        expect(enableLocksForTypeSpy).toHaveBeenCalledWith("zftp");
     });
 
-    it("should display error if zoweExplorerApi was not found", async () => {
+    it("should display error if zoweExplorerApi was not found", () => {
         jest.spyOn(ZoweVsCodeExtension, "getZoweExplorerApi").mockReturnValue(null);
         const showMessageSpy = jest.spyOn(Gui, "showMessage").mockImplementation();
         expect(
@@ -55,6 +61,6 @@ describe("Extension Unit Tests - function registerFtpApis", () => {
                 extensionPath: "./test",
             } as unknown as vscode.ExtensionContext)
         ).toEqual(undefined);
-        expect(showMessageSpy).toBeCalledTimes(1);
+        expect(showMessageSpy).toHaveBeenCalledTimes(1);
     });
 });

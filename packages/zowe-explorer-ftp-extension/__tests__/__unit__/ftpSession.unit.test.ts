@@ -10,10 +10,10 @@
  */
 
 import { FtpSession } from "../../src/ftpSession";
-import { imperative } from "@zowe/cli";
+import { imperative } from "@zowe/zowe-explorer-api";
 
 describe("FtpSession Unit Tests - function releaseConnections", () => {
-    it("should release all connecitons", () => {
+    it("should release all connecitons", async () => {
         const testFtpSession = new FtpSession({
             hostname: "sample.com",
         } as imperative.ISession);
@@ -41,9 +41,9 @@ describe("FtpSession Unit Tests - function releaseConnections", () => {
             configurable: true,
             writable: true,
         });
-        expect(testFtpSession.releaseConnections()).toEqual(undefined);
-        expect(ussListConnectionMock).toBeCalledTimes(1);
-        expect(mvsListConnectionMock).toBeCalledTimes(1);
-        expect(jesListConnectionMock).toBeCalledTimes(1);
+        await expect(testFtpSession.releaseConnections()).toEqual(undefined);
+        expect(ussListConnectionMock).toHaveBeenCalledTimes(1);
+        expect(mvsListConnectionMock).toHaveBeenCalledTimes(1);
+        expect(jesListConnectionMock).toHaveBeenCalledTimes(1);
     });
 });

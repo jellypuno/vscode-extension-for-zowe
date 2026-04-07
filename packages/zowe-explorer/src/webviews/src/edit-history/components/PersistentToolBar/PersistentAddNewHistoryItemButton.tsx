@@ -12,10 +12,8 @@
 import { VSCodeButton } from "@vscode/webview-ui-toolkit/react";
 import { JSXInternal } from "preact/src/jsx";
 import { useDataPanelContext } from "../PersistentUtils";
-import PersistentVSCodeAPI from "../PersistentVSCodeAPI";
-import * as nls from "vscode-nls";
-
-const localize: nls.LocalizeFunc = nls.loadMessageBundle();
+import PersistentVSCodeAPI from "../../../PersistentVSCodeAPI";
+import * as l10n from "@vscode/l10n";
 
 export default function PersistentAddNewHistoryItemButton(): JSXInternal.Element {
   const { type, selection } = useDataPanelContext();
@@ -29,12 +27,12 @@ export default function PersistentAddNewHistoryItemButton(): JSXInternal.Element
     });
   };
 
-  const newHistoryItemText = localize("PersistentAddNewHistoryItemButton.newHistoryItem", "Add New History Item");
+  const newHistoryItemText = l10n.t("Add New History Item");
 
   const renderAddItemButton = () => {
-    return selection[type] === "search" && type !== "jobs" ? (
+    return selection && selection[type] === "search" && type !== "jobs" ? (
       <VSCodeButton title={newHistoryItemText} appearance="secondary" style={{ maxWidth: "20vw", marginRight: "15px" }} onClick={handleClick}>
-        Add
+        {l10n.t("Add")}
       </VSCodeButton>
     ) : null;
   };

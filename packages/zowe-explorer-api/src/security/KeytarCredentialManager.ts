@@ -13,23 +13,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 
-import { getZoweDir } from "../profiles/ProfilesCache";
-import { imperative } from "@zowe/cli";
+import * as imperative from "@zowe/imperative";
+import { Constants } from "../globals";
+import { FileManagement } from "../utils";
+import { Types } from "../Types";
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import * as globals from "../globals";
 
 declare const __webpack_require__: typeof require;
 declare const __non_webpack_require__: typeof require;
-
-export type KeytarModule = {
-    deletePassword: (service: string, account: string) => Promise<boolean>;
-    findPassword: (service: string, account: string) => Promise<string | null>;
-    findCredentials: (name: string) => Promise<{ account: string; password: string }[]>;
-    getPassword: (service: string, account: string) => Promise<string | null>;
-    setPassword: (service: string, account: string, password: string) => Promise<void>;
-};
 
 /**
  * Keytar - Securely store user credentials in the system keychain
@@ -43,17 +36,17 @@ export class KeytarCredentialManager extends imperative.AbstractCredentialManage
      *
      * @public
      */
-    public static keytar: KeytarModule;
+    public static keytar: Types.KeytarModule;
 
     /**
      * Combined list of services that credentials may be stored under
      */
     private allServices: string[] = [
-        globals.SETTINGS_SCS_DEFAULT,
-        globals.SCS_ZOWE_PLUGIN,
-        globals.SCS_BRIGHTSIDE,
-        globals.SCS_ZOWE_CLI,
-        globals.SCS_BROADCOM_PLUGIN,
+        Constants.SETTINGS_SCS_DEFAULT,
+        Constants.SCS_ZOWE_PLUGIN,
+        Constants.SCS_BRIGHTSIDE,
+        Constants.SCS_ZOWE_CLI,
+        Constants.SCS_BROADCOM_PLUGIN,
     ];
 
     /**
@@ -80,10 +73,10 @@ export class KeytarCredentialManager extends imperative.AbstractCredentialManage
         this.preferredService = service;
     }
 
-    public static getSecurityModules(moduleName: string, isTheia: boolean): NodeModule | undefined {
+    public static getSecurityModules(moduleName: string): NodeJS.Module | undefined {
         let imperativeIsSecure = false;
         try {
-            const fileName = path.join(getZoweDir(), "settings", "imperative.json");
+            const fileName = path.join(FileManagement.getZoweDir(), "settings", "imperative.json");
             let settings: Record<string, unknown> = {};
             if (fs.existsSync(fileName)) {
                 settings = JSON.parse(fs.readFileSync(fileName, "utf8")) as Record<string, unknown>;
@@ -96,7 +89,7 @@ export class KeytarCredentialManager extends imperative.AbstractCredentialManage
             imperative.Logger.getAppLogger().warn(error as string);
             return undefined;
         }
-        return imperativeIsSecure ? getSecurityModules(moduleName, isTheia) : undefined;
+        return imperativeIsSecure ? getSecurityModules(moduleName) : undefined;
     }
 
     /**
@@ -210,10 +203,9 @@ export class KeytarCredentialManager extends imperative.AbstractCredentialManage
 /**
  * Imports the necessary security modules
  */
-export function getSecurityModules(moduleName: string, isTheia: boolean): NodeModule | undefined {
+export function getSecurityModules(moduleName: string): NodeJS.Module | undefined {
     const r = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
-    // Workaround for Theia issue (https://github.com/eclipse-theia/theia/issues/4935)
-    const appRoot = isTheia ? process.cwd() : vscode.env.appRoot;
+    const appRoot = vscode.env.appRoot;
     try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         return r(`${appRoot}/node_modules/${moduleName}`);

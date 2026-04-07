@@ -28,26 +28,40 @@ export interface IJestIt {
     title?: string;
 }
 
-export function spyOnSubscriptions(subscriptions: any[]) {
-    subscriptions.forEach((sub) => {
-        sub.mock.forEach((mock) => {
+function spyOnSubscription(sub: IJestIt): void {
+    const spyMap = new Map<jest.SpyInstance, IJestMock[]>();
+
+    sub.mock.forEach((mock) => {
+        if (!spyMap.has(mock.spy)) {
+            spyMap.set(mock.spy, []);
+        }
+        spyMap.get(mock.spy)!.push(mock);
+    });
+
+    spyMap.forEach((mocks, spy) => {
+        spy.mockClear();
+        mocks.forEach((mock) => {
             if (mock.ret) {
-                mock.spy.mockClear().mockReturnValueOnce(mock.ret);
+                spy.mockReturnValueOnce(mock.ret);
             } else {
-                mock.spy.mockClear().mockImplementation(jest.fn());
+                spy.mockImplementationOnce(jest.fn());
             }
         });
     });
 }
 
-export function processSubscriptions(subscriptions: IJestIt[], test: ITestContext) {
-    const getName = (str: string) => {
+export function processSubscriptions(subscriptions: IJestIt[], test: ITestContext): void {
+    const getName = (str: string): string => {
         return str.indexOf(":") >= 0 ? str.substring(0, str.indexOf(":")) : str;
     };
     subscriptions.forEach((sub) => {
         it(sub.title ?? `Test: ${sub.name}`, async () => {
+            spyOnSubscription(sub);
             const parms = sub.parm ?? [test.value];
-            await test.context.subscriptions.find((s) => Object.keys(s)[0] === getName(sub.name))?.[getName(sub.name)](...parms);
+            await test.context.subscriptions
+                .filter(Boolean)
+                .find((s) => Object.keys(s)[0] === getName(sub.name))
+                ?.[getName(sub.name)](...parms);
             sub.mock.forEach((mock) => {
                 expect(mock.spy).toHaveBeenCalledWith(...mock.arg);
             });

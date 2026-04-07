@@ -14,12 +14,16 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 
 import { FtpMvsApi } from "../../../src/ZoweExplorerFtpMvsApi";
-import { DataSetUtils, FTPConfig } from "@zowe/zos-ftp-for-zowe-cli";
+import { DataSetUtils } from "@zowe/zos-ftp-for-zowe-cli";
 import TestUtils from "../utils/TestUtils";
-import * as tmp from "tmp";
-import { sessionMap, ZoweLogger } from "../../../src/extension";
-import { Gui } from "@zowe/zowe-explorer-api";
+import * as path from "path";
+import * as os from "os";
+import * as crypto from "crypto";
+import { Gui, imperative } from "@zowe/zowe-explorer-api";
+import * as globals from "../../../src/globals";
 import { ZoweFtpExtensionError } from "../../../src/ZoweFtpExtensionError";
+import { mocked } from "../../../__mocks__/mockUtils";
+import { ZosFilesUtils } from "@zowe/zos-files-for-zowe-sdk";
 
 // two methods to mock modules: create a __mocks__ file for zowe-explorer-api.ts and direct mock for extension.ts
 jest.mock("../../../__mocks__/@zowe/zowe-explorer-api.ts");
@@ -32,15 +36,23 @@ const readableStream = stream.Readable.from([]);
 const fs = require("fs");
 
 fs.createReadStream = jest.fn().mockReturnValue(readableStream);
-const MvsApi = new FtpMvsApi();
+
+// Helper function to create temporary file names using Node.js built-ins
+function createTempFileName(): string {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zowe-test-mvs-"));
+    return path.join(tmpDir, `temp-${crypto.randomUUID()}.dat`);
+}
 
 describe("FtpMvsApi", () => {
+    let MvsApi: FtpMvsApi;
     beforeEach(() => {
+        const profile: imperative.IProfileLoaded = { message: "", type: "zftp", failNotFound: false, profile: { host: "example.com", port: 22 } };
+        MvsApi = new FtpMvsApi(profile);
         MvsApi.checkedProfile = jest.fn().mockReturnValue({ message: "success", type: "zftp", profile: { secureFtp: false }, failNotFound: false });
         MvsApi.ftpClient = jest.fn().mockReturnValue({ host: "", user: "", password: "", port: "" });
         MvsApi.releaseConnection = jest.fn();
-        sessionMap.get = jest.fn().mockReturnValue({ mvsListConnection: { connected: true } });
-        ZoweLogger.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
+        globals.SESSION_MAP.get = jest.fn().mockReturnValue({ mvsListConnection: { isConnected: () => true } });
+        globals.LOGGER.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
     });
 
     afterEach(() => {
@@ -50,8 +62,8 @@ describe("FtpMvsApi", () => {
 
     it("should list datasets.", async () => {
         const response = [
-            { dsname: "IBMUSER.DS1", dsorg: "PO", volume: "MIGRATED" },
-            { dsname: "IBMUSER.DS2", dsorg: "PS" },
+            { name: "IBMUSER.DS1", dsOrg: "PO", volume: "VOL001" },
+            { name: "IBMUSER.DS2", dsOrg: "PS" },
         ];
         DataSetUtils.listDataSets = jest.fn().mockReturnValue(response);
         const mockParams = {
@@ -60,7 +72,26 @@ describe("FtpMvsApi", () => {
         const result = await MvsApi.dataSet(mockParams.filter);
 
         expect(result.apiResponse.items[0].dsname).toContain("IBMUSER.DS1");
-        expect(DataSetUtils.listDataSets).toBeCalledTimes(1);
+        expect(result.apiResponse.items[0].vols).toBe("VOL001");
+        expect(DataSetUtils.listDataSets).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalledTimes(0);
+    });
+
+    it("should list datasets with start and maxLength options", async () => {
+        const response = [
+            { name: "IBMUSER.DS1", dsOrg: "PO", volume: "MIGRATED" },
+            { name: "IBMUSER.DS2", dsOrg: "PS" },
+            { name: "IBMUSER.DS3", dsOrg: "PO" },
+        ];
+        DataSetUtils.listDataSets = jest.fn().mockReturnValue(response);
+        const mockParams = {
+            filter: "IBMUSER",
+        };
+        const result = await MvsApi.dataSet(mockParams.filter, { start: "IBMUSER.DS2", maxLength: 1 });
+
+        expect(result.apiResponse.items[0].dsname).toContain("IBMUSER.DS2");
+        expect(result.apiResponse.items.length).toBe(1);
+        expect(DataSetUtils.listDataSets).toHaveBeenCalledTimes(1);
         expect(MvsApi.releaseConnection).toHaveBeenCalledTimes(0);
     });
 
@@ -73,12 +104,24 @@ describe("FtpMvsApi", () => {
         const result = await MvsApi.allMembers(mockParams.dataSetName);
 
         expect(result.apiResponse.items[0].member).toContain("M1");
-        expect(DataSetUtils.listMembers).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.listMembers).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
+    });
+
+    it("should list dataset members with start and maxLength options", async () => {
+        const response = [{ name: "M1" }, { name: "M2" }, { name: "M3" }];
+        DataSetUtils.listMembers = jest.fn().mockReturnValue(response);
+        const mockParams = {
+            dataSetName: "IBMUSER.DS1",
+        };
+        const result = await MvsApi.allMembers(mockParams.dataSetName, { start: "M2", maxLength: 1 });
+
+        expect(result.apiResponse.items[0].member).toContain("M2");
+        expect(result.apiResponse.items.length).toBe(1);
     });
 
     it("should view dataset content.", async () => {
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
         const response = TestUtils.getSingleLineStream();
         DataSetUtils.downloadDataSet = jest.fn().mockReturnValue(response);
 
@@ -91,16 +134,17 @@ describe("FtpMvsApi", () => {
         };
         const result = await MvsApi.getContents(mockParams.dataSetName, mockParams.options);
 
-        expect(result.apiResponse.etag).toHaveLength(40);
-        expect(DataSetUtils.downloadDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(result.apiResponse.etag).toHaveLength(64);
+        expect(DataSetUtils.downloadDataSet).toHaveBeenCalledTimes(1);
+        expect(mocked(DataSetUtils.downloadDataSet).mock.calls[0][2].localFile).toBe(localFile);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
 
-        expect(response._readableState.buffer.head.data.toString()).toContain("Hello world");
+        expect((response._readableState.buffer.head?.data ?? response._readableState.buffer).toString()).toContain("Hello world");
     });
 
-    it("should upload content to dataset.", async () => {
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
-        const tmpNameSyncSpy = jest.spyOn(tmp, "tmpNameSync");
+    it("should upload content to dataset - sequential data set", async () => {
+        const localFile = createTempFileName();
+        const mkdtempSyncSpy = jest.spyOn(fs, "mkdtempSync");
         const rmSyncSpy = jest.spyOn(fs, "rmSync");
 
         fs.writeFileSync(localFile, "hello");
@@ -112,7 +156,7 @@ describe("FtpMvsApi", () => {
 
         const mockParams = {
             inputFilePath: localFile,
-            dataSetName: "   (IBMUSER).DS2",
+            dataSetName: "IBMUSER.DS2",
             options: { encoding: "", returnEtag: true, etag: "utf8" },
         };
         jest.spyOn(MvsApi as any, "getContents").mockResolvedValueOnce({ apiResponse: { etag: "utf8" } });
@@ -120,20 +164,52 @@ describe("FtpMvsApi", () => {
         jest.spyOn(Gui, "warningMessage").mockImplementation();
         const result = await MvsApi.putContents(mockParams.inputFilePath, mockParams.dataSetName, mockParams.options);
         expect(result.commandResponse).toContain("Data set uploaded successfully.");
-        expect(DataSetUtils.listDataSets).toBeCalledTimes(1);
-        expect(DataSetUtils.uploadDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
-        // check that correct function is called from node-tmp
-        expect(tmpNameSyncSpy).toHaveBeenCalled();
+        expect(DataSetUtils.listDataSets).toHaveBeenCalledTimes(1);
+        expect(DataSetUtils.uploadDataSet).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
+        // check that correct Node.js built-in functions are called
+        expect(mkdtempSyncSpy).toHaveBeenCalled();
+        expect(rmSyncSpy).toHaveBeenCalled();
+    });
+
+    it("should generate a member name for PDS upload if one wasn't provided", async () => {
+        const localFile = createTempFileName();
+        const mkdtempSyncSpy = jest.spyOn(fs, "mkdtempSync");
+        const rmSyncSpy = jest.spyOn(fs, "rmSync");
+
+        fs.writeFileSync(localFile, "helloPdsMember");
+        const response = TestUtils.getSingleLineStream();
+        const response2 = { success: true, commandResponse: "", apiResponse: { items: [{ dsname: "IBMUSER.PDS", dsorg: "PO", lrecl: 255 }] } };
+        const dataSetMock = jest.spyOn(MvsApi, "dataSet").mockResolvedValue(response2 as any);
+        const uploadDataSetMock = jest.spyOn(DataSetUtils, "uploadDataSet").mockResolvedValue(response);
+        jest.spyOn(MvsApi, "getContents").mockResolvedValue({ apiResponse: { etag: "123" } } as any);
+
+        const mockParams = {
+            inputFilePath: localFile,
+            dataSetName: "IBMUSER.PDS",
+            options: { encoding: "", returnEtag: true, etag: "utf8" },
+        };
+        const generateMemberNameSpy = jest.spyOn(ZosFilesUtils, "generateMemberName");
+        jest.spyOn(MvsApi as any, "getContents").mockResolvedValueOnce({ apiResponse: { etag: "utf8" } });
+        jest.spyOn(fs, "readFileSync").mockReturnValue("test");
+        jest.spyOn(Gui, "warningMessage").mockImplementation();
+        const result = await MvsApi.putContents(mockParams.inputFilePath, mockParams.dataSetName, mockParams.options);
+        expect(generateMemberNameSpy).toHaveBeenCalledWith(localFile);
+        expect(result.commandResponse).toContain("Data set uploaded successfully.");
+        expect(dataSetMock).toHaveBeenCalledTimes(1);
+        expect(uploadDataSetMock).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
+        // check that correct Node.js built-in functions are called
+        expect(mkdtempSyncSpy).toHaveBeenCalled();
         expect(rmSyncSpy).toHaveBeenCalled();
     });
 
     it("should upload single space to dataset when secureFtp is true and contents are empty", async () => {
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
 
         fs.writeFileSync(localFile, "");
         const response = TestUtils.getSingleLineStream();
-        DataSetUtils.listDataSets = jest.fn().mockReturnValue([{ dsname: "USER.EMPTYDS", dsorg: "PS", lrecl: 2 }]);
+        DataSetUtils.listDataSets = jest.fn().mockReturnValue([{ name: "USER.EMPTYDS", dsOrg: "PS", recordLength: 2 }]);
         const uploadDataSetMock = jest.fn().mockReturnValue(response);
         DataSetUtils.uploadDataSet = uploadDataSetMock;
         jest.spyOn(MvsApi, "getContents").mockResolvedValue({ apiResponse: { etag: "123" } } as any);
@@ -162,7 +238,44 @@ describe("FtpMvsApi", () => {
         });
         // ensure options object at runtime does not have localFile
         expect(Object.keys(uploadDataSetMock.mock.calls[0][2]).find((k) => k === "localFile")).toBe(undefined);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
+    });
+
+    it("should upload single space to dataset when secureFtp is true and contents are empty", async () => {
+        const localFile = createTempFileName();
+
+        fs.writeFileSync(localFile, "");
+        const response = TestUtils.getSingleLineStream();
+        DataSetUtils.listDataSets = jest.fn().mockReturnValue([{ name: "USER.EMPTYDS", dsOrg: "PS", recordLength: 2 }]);
+        const uploadDataSetMock = jest.fn().mockReturnValue(response);
+        DataSetUtils.uploadDataSet = uploadDataSetMock;
+        jest.spyOn(MvsApi, "getContents").mockResolvedValue({ apiResponse: { etag: "123" } } as any);
+
+        const mockParams = {
+            inputFilePath: localFile,
+            dataSetName: "USER.EMPTYDS",
+            options: { encoding: "", returnEtag: true, etag: "utf8" },
+        };
+        jest.spyOn(MvsApi, "checkedProfile").mockReturnValueOnce({
+            type: "zftp",
+            message: "",
+            profile: {
+                secureFtp: true,
+            },
+            failNotFound: false,
+        });
+
+        jest.spyOn(MvsApi as any, "getContentsTag").mockReturnValue(undefined);
+        jest.spyOn(fs, "readFileSync").mockReturnValue("");
+        await MvsApi.putContents(mockParams.inputFilePath, mockParams.dataSetName, mockParams.options);
+        expect(DataSetUtils.uploadDataSet).toHaveBeenCalledWith({ host: "", password: "", port: "", user: "" }, "USER.EMPTYDS", {
+            content: " ",
+            encoding: "",
+            transferType: "ascii",
+        });
+        // ensure options object at runtime does not have localFile
+        expect(Object.keys(uploadDataSetMock.mock.calls[0][2]).find((k) => k === "localFile")).toBe(undefined);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should create dataset.", async () => {
@@ -183,8 +296,8 @@ describe("FtpMvsApi", () => {
             secondary: 2,
         });
         expect(result.commandResponse).toContain("Data set created successfully.");
-        expect(DataSetUtils.allocateDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.allocateDataSet).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should create dataset if no options are passed in", async () => {
@@ -196,8 +309,8 @@ describe("FtpMvsApi", () => {
         };
         const result = await MvsApi.createDataSet(mockParams.dataSetType, mockParams.dataSetName);
         expect(result.commandResponse).toContain("Data set created successfully.");
-        expect(DataSetUtils.allocateDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.allocateDataSet).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should create dataset member.", async () => {
@@ -209,8 +322,8 @@ describe("FtpMvsApi", () => {
         };
         const result = await MvsApi.createDataSetMember(mockParams.dataSetName, mockParams.options);
         expect(result.commandResponse).toContain("Member created successfully.");
-        expect(DataSetUtils.uploadDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.uploadDataSet).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should fail to call getContents if an exception occurs in FtpClient.", async () => {
@@ -220,9 +333,7 @@ describe("FtpMvsApi", () => {
             type: "file",
             options: { encoding: "" },
         };
-        jest.spyOn(FTPConfig, "connectFromArguments").mockImplementationOnce((val) => {
-            throw new Error("getContents example error");
-        });
+        jest.spyOn(MvsApi, "ftpClient").mockReturnValueOnce(null);
         await expect(async () => {
             await MvsApi.getContents(mockParams.dataSetName, mockParams.options);
         }).rejects.toThrow(ZoweFtpExtensionError);
@@ -240,8 +351,8 @@ describe("FtpMvsApi", () => {
         const result = await MvsApi.renameDataSet(mockParams.currentDataSetName, mockParams.newDataSetName);
         await MvsApi.renameDataSetMember(mockParams.dataSetName, mockParams.currentMemberName, mockParams.newMemberName);
         expect(result.commandResponse).toContain("Rename completed successfully.");
-        expect(DataSetUtils.renameDataSet).toBeCalledTimes(2);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.renameDataSet).toHaveBeenCalledTimes(2);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should delete dataset.", async () => {
@@ -251,8 +362,8 @@ describe("FtpMvsApi", () => {
         };
         const result = await MvsApi.deleteDataSet(mockParams.dataSetName);
         expect(result.commandResponse).toContain("Delete completed successfully.");
-        expect(DataSetUtils.deleteDataSet).toBeCalledTimes(1);
-        expect(MvsApi.releaseConnection).toBeCalled();
+        expect(DataSetUtils.deleteDataSet).toHaveBeenCalledTimes(1);
+        expect(MvsApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should throw an error when copyDataSet is called", async () => {
@@ -287,7 +398,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when list dataset failed", async () => {
         jest.spyOn(DataSetUtils, "listDataSets").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("List dataset failed.");
             })
         );
@@ -298,7 +409,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when list dataset members failed", async () => {
         jest.spyOn(DataSetUtils, "listMembers").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("List members failed.");
             })
         );
@@ -309,7 +420,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when get contents failed", async () => {
         jest.spyOn(DataSetUtils, "downloadDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Download dataset failed.");
             })
         );
@@ -327,11 +438,11 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when put contents failed", async () => {
         jest.spyOn(DataSetUtils, "uploadDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Upload dataset failed.");
             })
         );
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
         const mockParams = {
             inputFilePath: localFile,
             dataSetName: "IBMUSER.DS2",
@@ -344,7 +455,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when create dataset failed", async () => {
         jest.spyOn(DataSetUtils, "allocateDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Allocate dataset failed.");
             })
         );
@@ -360,7 +471,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when create dataset member failed", async () => {
         jest.spyOn(DataSetUtils, "uploadDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Upload dataset failed.");
             })
         );
@@ -376,7 +487,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when rename dataset failed", async () => {
         jest.spyOn(DataSetUtils, "renameDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Rename dataset failed.");
             })
         );
@@ -387,7 +498,7 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when rename dataset member failed", async () => {
         jest.spyOn(DataSetUtils, "renameDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Rename dataset failed.");
             })
         );
@@ -398,12 +509,32 @@ describe("FtpMvsApi", () => {
 
     it("should throw error when delete dataset failed", async () => {
         jest.spyOn(DataSetUtils, "deleteDataSet").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Delete dataset failed.");
             })
         );
         await expect(async () => {
             await MvsApi.deleteDataSet("IBMUSER.DS");
         }).rejects.toThrow(ZoweFtpExtensionError);
+    });
+
+    describe("uploadFromBuffer", () => {
+        function getBlockMocks(): Record<string, jest.SpyInstance> {
+            return {
+                processNewlinesSpy: jest.spyOn(imperative.IO, "processNewlines"),
+                putContents: jest.spyOn(MvsApi, "putContents").mockImplementation(),
+                mkdtempSyncMock: jest.spyOn(fs, "mkdtempSync").mockReturnValueOnce("/tmp/zowe-test-mvs-12345"),
+                writeSyncMock: jest.spyOn(fs, "writeSync").mockImplementation(),
+            };
+        }
+
+        it("should upload file from buffer", async () => {
+            const buf = Buffer.from("abc123");
+            const blockMocks = getBlockMocks();
+
+            const dsName = "SOME.DS(MEMB)";
+            await MvsApi.uploadFromBuffer(buf, dsName);
+            expect(blockMocks.putContents).toHaveBeenCalledWith(buf, dsName, undefined);
+        });
     });
 });

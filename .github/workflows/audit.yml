@@ -4,22 +4,37 @@ on: [push, pull_request]
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository) && !contains(github.event.head_commit.message, '[ci skip]')
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Use Node.js LTS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
       - run: |
-          npm install -g yarn
-          yarn install --frozen-lockfile
+          npm install -g pnpm
+          pnpm install
 
       - name: Check Vulnerabilities
-        run: yarn audit --production --groups dependencies
+        run: pnpm audit --prod
+  audit-all:
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: |
+          npm install -g pnpm
+          pnpm install
+      - name: Check All Vulnerabilities (including dev)
+        run: pnpm audit --audit-level high

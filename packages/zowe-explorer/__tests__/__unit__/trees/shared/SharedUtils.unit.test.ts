@@ -1,0 +1,2242 @@
+/**
+ * This program and the accompanying materials are made available under the terms of the
+ * Eclipse Public License v2.0 which accompanies this distribution, and is available at
+ * https://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Copyright Contributors to the Zowe Project.
+ *
+ */
+
+import * as vscode from "vscode";
+import { createIProfile, createISession, createInstanceOfProfile } from "../../../__mocks__/mockCreators/shared";
+import { createDatasetSessionNode } from "../../../__mocks__/mockCreators/datasets";
+import { createUSSNode, createUSSSessionNode } from "../../../__mocks__/mockCreators/uss";
+import { UssFSProvider } from "../../../../src/trees/uss/UssFSProvider";
+import { imperative, ProfilesCache, Gui, ZosEncoding, BaseProvider, Sorting, CorrelatedError } from "@zowe/zowe-explorer-api";
+import { Constants } from "../../../../src/configuration/Constants";
+import { SettingsConfig } from "../../../../src/configuration/SettingsConfig";
+import { FilterItem } from "../../../../src/management/FilterManagement";
+import { ZoweLocalStorage } from "../../../../src/tools/ZoweLocalStorage";
+import { ZoweLogger } from "../../../../src/tools/ZoweLogger";
+import { DatasetFSProvider } from "../../../../src/trees/dataset/DatasetFSProvider";
+import { ZoweDatasetNode } from "../../../../src/trees/dataset/ZoweDatasetNode";
+import { ZoweJobNode, ZoweSpoolNode } from "../../../../src/trees/job/ZoweJobNode";
+import { SharedUtils } from "../../../../src/trees/shared/SharedUtils";
+import { ZoweUSSNode } from "../../../../src/trees/uss/ZoweUSSNode";
+import { MockedProperty } from "../../../__mocks__/mockUtils";
+import { createIJobFile, createJobSessionNode } from "../../../__mocks__/mockCreators/jobs";
+import { JobFSProvider } from "../../../../src/trees/job/JobFSProvider";
+import { ZoweExplorerApiRegister } from "../../../../src/extending/ZoweExplorerApiRegister";
+
+jest.mock("../../../../src/tools/ZoweLocalStorage");
+
+function createGlobalMocks() {
+    const newMocks = {
+        session: createISession(),
+        profileOne: createIProfile(),
+        mockGetInstance: jest.fn(),
+        mockProfileInstance: null,
+        mockProfilesCache: null,
+        createDirectory: jest.fn(),
+    };
+    jest.spyOn(UssFSProvider.instance, "createDirectory").mockImplementation(newMocks.createDirectory);
+    newMocks.mockProfilesCache = new ProfilesCache(imperative.Logger.getAppLogger());
+    newMocks.mockProfileInstance = createInstanceOfProfile(createIProfile());
+    Object.defineProperty(Constants, "PROFILES_CACHE", {
+        value: newMocks.mockProfileInstance,
+        configurable: true,
+    });
+
+    Object.defineProperty(newMocks.mockProfilesCache, "getConfigInstance", {
+        value: jest.fn(() => {
+            return {
+                usingTeamConfig: false,
+            };
+        }),
+    });
+
+    return newMocks;
+}
+
+function makeFakeMvsApi(items: any[] = []) {
+    return {
+        dataSet: jest.fn().mockResolvedValue({ apiResponse: { items } }),
+        allMembers: jest.fn().mockResolvedValue({ apiResponse: { items: [] } }),
+    };
+}
+
+beforeEach(() => {
+    jest.resetAllMocks();
+    jest.clearAllMocks();
+    jest.spyOn(ZoweExplorerApiRegister as any, "getMvsApi").mockImplementation(() => makeFakeMvsApi());
+});
+
+describe("Shared Utils Unit Tests - Function node.concatChildNodes()", () => {
+    it("Checks that concatChildNodes returns the proper array of children", async () => {
+        const globalMocks = createGlobalMocks();
+        const rootNode = new ZoweUSSNode({
+            label: "root",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: globalMocks.session,
+            profile: globalMocks.profileOne,
+        });
+        const childNode1 = new ZoweUSSNode({
+            label: "child1",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            parentNode: rootNode,
+            session: globalMocks.session,
+            profile: globalMocks.profileOne,
+        });
+        const childNode2 = new ZoweUSSNode({
+            label: "child2",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            parentNode: childNode1,
+            session: globalMocks.session,
+            profile: globalMocks.profileOne,
+        });
+
+        childNode1.children.push(childNode2);
+        rootNode.children.push(childNode1);
+
+        const returnedArray = SharedUtils.concatChildNodes([rootNode]);
+        expect(returnedArray).toEqual([childNode2, childNode1, rootNode]);
+    });
+});
+
+describe("Positive testing", () => {
+    it("should pass for ZoweDatasetTreeNode with ZoweDatasetNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const dsNode = new ZoweDatasetNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweDatasetTreeNode(dsNode);
+        expect(value).toBeTruthy();
+    });
+    it("should pass for ZoweUSSTreeNode with ZoweUSSNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const ussNode = new ZoweUSSNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweUSSTreeNode(ussNode);
+        expect(value).toBeTruthy();
+    });
+    it("should pass for ZoweJobTreeNode with ZoweJobNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const jobNode = new ZoweJobNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweJobTreeNode(jobNode);
+        expect(value).toBeTruthy();
+    });
+});
+
+describe("Negative testing for ZoweDatasetTreeNode", () => {
+    it("should fail with ZoweUSSNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const ussNode = new ZoweUSSNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweDatasetTreeNode(ussNode);
+        expect(value).toBeFalsy();
+    });
+    it("should fail with ZoweJobNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const jobNode = new ZoweJobNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweDatasetTreeNode(jobNode);
+        expect(value).toBeFalsy();
+    });
+});
+
+describe("Negative testing for ZoweUSSTreeNode", () => {
+    it("should fail with ZoweDatasetNode node type", () => {
+        const dsNode = new ZoweDatasetNode({ label: "", collapsibleState: vscode.TreeItemCollapsibleState.None });
+        const value = SharedUtils.isZoweUSSTreeNode(dsNode);
+        expect(value).toBeFalsy();
+    });
+    it("should fail with ZoweJobNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const jobNode = new ZoweJobNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweUSSTreeNode(jobNode);
+        expect(value).toBeFalsy();
+    });
+});
+
+describe("Negative testing for ZoweJobTreeNode", () => {
+    it("should fail with ZoweDatasetNode node type", () => {
+        const dsNode = new ZoweDatasetNode({ label: "", collapsibleState: vscode.TreeItemCollapsibleState.None });
+        const value = SharedUtils.isZoweJobTreeNode(dsNode);
+        expect(value).toBeFalsy();
+    });
+    it("should fail with ZoweUSSNode node type", () => {
+        const globalMocks = createGlobalMocks();
+        const ussNode = new ZoweUSSNode({
+            label: "",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.profileOne,
+        });
+        const value = SharedUtils.isZoweJobTreeNode(ussNode);
+        expect(value).toBeFalsy();
+    });
+});
+
+describe("Shared Utils Unit Tests - Function filterTreeByString", () => {
+    it("Testing that filterTreeByString returns the correct array", async () => {
+        const qpItems = [
+            new FilterItem({ text: "[sestest]: HLQ.PROD2.STUFF1" }),
+            new FilterItem({ text: "[sestest]: HLQ.PROD3.STUFF2(TESTMEMB)" }),
+            new FilterItem({ text: "[sestest]: /test/tree/abc" }),
+        ];
+
+        let filteredValues = await SharedUtils.filterTreeByString("testmemb", qpItems);
+        expect(filteredValues).toStrictEqual([qpItems[1]]);
+        filteredValues = await SharedUtils.filterTreeByString("sestest", qpItems);
+        expect(filteredValues).toStrictEqual(qpItems);
+        filteredValues = await SharedUtils.filterTreeByString("HLQ.PROD2.STUFF1", qpItems);
+        expect(filteredValues).toStrictEqual([qpItems[0]]);
+        filteredValues = await SharedUtils.filterTreeByString("HLQ.*.STUFF*", qpItems);
+        expect(filteredValues).toStrictEqual([qpItems[0], qpItems[1]]);
+        filteredValues = await SharedUtils.filterTreeByString("/test/tree/abc", qpItems);
+        expect(filteredValues).toStrictEqual([qpItems[2]]);
+        filteredValues = await SharedUtils.filterTreeByString("*/abc", qpItems);
+        expect(filteredValues).toStrictEqual([qpItems[2]]);
+    });
+});
+
+describe("Shared Utils Unit Tests - Function getSelectedNodeList", () => {
+    it("Testing that getSelectedNodeList returns the correct array when single node is selected", () => {
+        const selectedNodes = [];
+        const aNode = createTestNode();
+        selectedNodes.push(aNode);
+        const nodeList = SharedUtils.getSelectedNodeList(aNode, selectedNodes);
+
+        expect(nodeList).toEqual(selectedNodes);
+    });
+
+    it("Testing that getSelectedNodeList returns the correct array when single node is selected via quickKeys", () => {
+        const selectedNodes = undefined;
+        const aNode = createTestNode();
+        const nodeList = SharedUtils.getSelectedNodeList(aNode, selectedNodes);
+
+        expect(nodeList[0]).toEqual(aNode);
+    });
+
+    it("Testing that getSelectedNodeList returns the correct array when multiple node is selected", () => {
+        const selectedNodes = [];
+        const aNode = createTestNode();
+        selectedNodes.push(aNode);
+        const bNode = createTestNode();
+        selectedNodes.push(bNode);
+        const nodeList = SharedUtils.getSelectedNodeList(aNode, selectedNodes);
+
+        expect(nodeList).toEqual(selectedNodes);
+    });
+
+    it("returns an empty array when neither node or nodeList are valid", () => {
+        const nodeList = SharedUtils.getSelectedNodeList(null as any, null as any);
+        expect(nodeList).toEqual([]);
+    });
+
+    function createTestNode() {
+        const node = new ZoweDatasetNode({ label: "testLabel", collapsibleState: vscode.TreeItemCollapsibleState.Collapsed });
+        return node;
+    }
+});
+
+describe("Shared utils unit tests - function sortTreeItems", () => {
+    it("prioritizes context value when sorting", () => {
+        const toSort = [
+            { label: "A", contextValue: "some_context" },
+            { label: "Z", contextValue: "some_other_context" },
+            { label: "Y", contextValue: "some_context" },
+            { label: "X", contextValue: "some_context" },
+            { label: "W", contextValue: "some_other_context" },
+            { label: "V", contextValue: "some_context" },
+            { label: "U", contextValue: "some_other_context" },
+            { label: "T", contextValue: "some_other_context" },
+            { label: "B", contextValue: "some_other_context" },
+        ];
+        SharedUtils.sortTreeItems(toSort, "some_context");
+        expect(toSort).toStrictEqual([
+            { label: "A", contextValue: "some_context" },
+            { label: "V", contextValue: "some_context" },
+            { label: "X", contextValue: "some_context" },
+            { label: "Y", contextValue: "some_context" },
+            { label: "B", contextValue: "some_other_context" },
+            { label: "T", contextValue: "some_other_context" },
+            { label: "U", contextValue: "some_other_context" },
+            { label: "W", contextValue: "some_other_context" },
+            { label: "Z", contextValue: "some_other_context" },
+        ]);
+    });
+});
+
+describe("Shared utils unit tests - function promptForEncoding", () => {
+    const binaryEncoding: ZosEncoding = { kind: "binary" };
+    const textEncoding: ZosEncoding = { kind: "text" };
+    const otherEncoding: ZosEncoding = { kind: "other", codepage: "IBM-1047" };
+
+    function createBlockMocks() {
+        const showInputBox = jest.spyOn(Gui, "showInputBox").mockResolvedValue(undefined);
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue(undefined);
+        const localStorageGet = jest.spyOn(ZoweLocalStorage, "getValue").mockReturnValue(undefined);
+        const localStorageSet = jest.spyOn(ZoweLocalStorage, "setValue").mockReturnValue(undefined);
+        const getEncodingForFile = jest.spyOn((BaseProvider as any).prototype, "getEncodingForFile");
+        const setEncodingForFile = jest.spyOn((BaseProvider as any).prototype, "setEncodingForFile").mockReturnValue(undefined);
+        const fetchEncodingForUri = jest.spyOn(UssFSProvider.instance, "fetchEncodingForUri").mockResolvedValue(undefined as any);
+        const createDirectorySpy = jest.spyOn(UssFSProvider.instance, "createDirectory").mockImplementation();
+        const getEncodingForFileSpy = jest.spyOn(UssFSProvider.instance, "getEncodingForFile").mockReturnValue({ kind: "binary" });
+
+        return {
+            profile: createIProfile(),
+            session: createISession(),
+            showInputBox,
+            showQuickPick,
+            localStorageGet,
+            localStorageSet,
+            getEncodingForFile,
+            setEncodingForFile,
+            fetchEncodingForUri,
+            createDirectorySpy,
+            getEncodingForFileSpy,
+        };
+    }
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it("prompts for text encoding for USS file", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[0]);
+        blockMocks.getEncodingForFile.mockReturnValueOnce(undefined);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(encoding).toEqual(textEncoding);
+    });
+
+    it("prompts for binary encoding for USS file", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[1]);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(encoding).toEqual(binaryEncoding);
+    });
+
+    it("prompts for other encoding for USS file and returns codepage", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[2]);
+        blockMocks.showInputBox.mockResolvedValueOnce("IBM-1047");
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(encoding).toEqual(otherEncoding);
+    });
+
+    it("prompts for other encoding for USS file and returns undefined", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[2]);
+        blockMocks.showInputBox.mockResolvedValueOnce(undefined);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(encoding).toBeUndefined();
+    });
+
+    it("prompts for encoding for tagged USS file", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        node.setEncoding(binaryEncoding);
+        await SharedUtils.promptForEncoding(node, "IBM-1047");
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(await blockMocks.showQuickPick.mock.calls[0][0][0]).toEqual({ label: "IBM-1047", description: "USS file tag" });
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(
+            expect.objectContaining({ placeHolder: "Current encoding is Binary", title: "Choose encoding for testFile" })
+        );
+    });
+
+    it("prompts for encoding for tagged USS binary file", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        node.setEncoding(binaryEncoding);
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[0]);
+        const encoding = await SharedUtils.promptForEncoding(node, "binary");
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(await blockMocks.showQuickPick.mock.calls[0][0][0]).toEqual({ label: "binary", description: "USS file tag" });
+        expect(encoding).toEqual({ kind: "binary" });
+    });
+
+    it("prompts for encoding for USS file when profile contains encoding", async () => {
+        const blockMocks = createBlockMocks();
+        (blockMocks.profile.profile as any).encoding = "IBM-1047";
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.getEncodingForFile.mockReturnValueOnce({ kind: "text" });
+        await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(await blockMocks.showQuickPick.mock.calls[0][0][0]).toEqual({
+            label: "IBM-1047",
+            description: `From profile ${blockMocks.profile.name}`,
+        });
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is EBCDIC" }));
+    });
+
+    it("prompts for encoding for USS file when profile contains encoding as number", async () => {
+        const blockMocks = createBlockMocks();
+        (blockMocks.profile.profile as any).encoding = 1047;
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        blockMocks.getEncodingForFile.mockReturnValueOnce({ kind: "text" });
+        await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(await blockMocks.showQuickPick.mock.calls[0][0][0]).toEqual({
+            label: "1047",
+            description: `From profile ${blockMocks.profile.name}`,
+        });
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is EBCDIC" }));
+    });
+
+    it("prompts for encoding for USS file and shows recent values", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        node.setEncoding(otherEncoding);
+        blockMocks.getEncodingForFile.mockReturnValueOnce(otherEncoding);
+        const encodingHistory = ["IBM-123", "IBM-456", "IBM-789"];
+        blockMocks.localStorageGet.mockReturnValueOnce(encodingHistory);
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[4]);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect((await blockMocks.showQuickPick.mock.calls[0][0]).slice(4)).toEqual(encodingHistory.map((x) => ({ label: x })));
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is IBM-1047" }));
+        expect(encoding).toEqual({ ...otherEncoding, codepage: encodingHistory[0] });
+    });
+
+    it("remembers cached encoding for USS node", async () => {
+        const blockMocks = createBlockMocks();
+        const node = new ZoweUSSNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentPath: "/root",
+        });
+        node.setEncoding(binaryEncoding);
+        blockMocks.getEncodingForFile.mockReturnValueOnce(binaryEncoding);
+        await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is Binary" }));
+    });
+
+    it("remembers cached encoding for data set node", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createDatasetSessionNode(blockMocks.session, blockMocks.profile);
+        const node = new ZoweDatasetNode({
+            label: "TEST.PS",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        DatasetFSProvider.instance.encodingMap[node.resourceUri?.path] = { kind: "text" };
+        blockMocks.getEncodingForFile.mockReturnValueOnce(undefined);
+        await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is EBCDIC" }));
+    });
+
+    it("remembers cached encoding for data set member node", async () => {
+        const blockMocks = createBlockMocks();
+        const parentNode = new ZoweDatasetNode({
+            label: "TEST.PDS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+        });
+        const node = new ZoweDatasetNode({
+            label: "MEMBER",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: blockMocks.profile,
+            parentNode,
+            contextOverride: Constants.DS_MEMBER_CONTEXT,
+        });
+        const existsMock = jest.spyOn(DatasetFSProvider.instance, "exists").mockReturnValueOnce(true);
+        node.setEncoding(otherEncoding);
+        expect(existsMock).toHaveBeenCalled();
+        blockMocks.getEncodingForFile.mockReturnValueOnce(undefined);
+        await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is IBM-1047" }));
+    });
+
+    it("remembers cached encoding for spool node", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createJobSessionNode(blockMocks.session, blockMocks.profile);
+        const jobNode = new ZoweJobNode({
+            label: "TESTPS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        const spoolNode = new ZoweSpoolNode({
+            label: "SPOOL",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            spool: createIJobFile(),
+            parentNode: jobNode,
+            profile: blockMocks.profile,
+        });
+        JobFSProvider.instance.encodingMap[spoolNode.resourceUri?.path] = { kind: "text" };
+        blockMocks.getEncodingForFile.mockReturnValueOnce(undefined);
+        await SharedUtils.promptForEncoding(spoolNode);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showQuickPick.mock.calls[0][1]).toEqual(expect.objectContaining({ placeHolder: "Current encoding is EBCDIC" }));
+    });
+
+    it("prompts for text encoding for Spool file", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createJobSessionNode(blockMocks.session, blockMocks.profile);
+        const jobNode = new ZoweJobNode({
+            label: "TESTPS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        const node = new ZoweSpoolNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: jobNode,
+            spool: createIJobFile(),
+        });
+
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[0]);
+        blockMocks.getEncodingForFile.mockReturnValueOnce(undefined);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(encoding).toEqual(textEncoding);
+    });
+
+    it("prompts for binary encoding for Spool file", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createJobSessionNode(blockMocks.session, blockMocks.profile);
+        const jobNode = new ZoweJobNode({
+            label: "TESTPS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        const node = new ZoweSpoolNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: jobNode,
+            spool: createIJobFile(),
+        });
+
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[1]);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(encoding).toEqual(binaryEncoding);
+    });
+
+    it("prompts for other encoding for Spool file and returns codepage", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createJobSessionNode(blockMocks.session, blockMocks.profile);
+        const jobNode = new ZoweJobNode({
+            label: "TESTPS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        const node = new ZoweSpoolNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: jobNode,
+            spool: createIJobFile(),
+        });
+
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[2]);
+        blockMocks.showInputBox.mockResolvedValueOnce("IBM-1047");
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(encoding).toEqual(otherEncoding);
+    });
+
+    it("prompts for other encoding for Spool file and returns undefined", async () => {
+        const blockMocks = createBlockMocks();
+        const sessionNode = createJobSessionNode(blockMocks.session, blockMocks.profile);
+        const jobNode = new ZoweJobNode({
+            label: "TESTPS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: sessionNode,
+        });
+        const node = new ZoweSpoolNode({
+            label: "testFile",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            session: blockMocks.session,
+            profile: blockMocks.profile,
+            parentNode: jobNode,
+            spool: createIJobFile(),
+        });
+
+        blockMocks.showQuickPick.mockImplementationOnce(async (items) => items[2]);
+        blockMocks.showInputBox.mockResolvedValueOnce(undefined);
+        const encoding = await SharedUtils.promptForEncoding(node);
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(encoding).toBeUndefined();
+    });
+});
+
+describe("Shared utils unit tests - function promptForUploadEncoding", () => {
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it("returns binary when Binary is selected", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(undefined), update: jest.fn() },
+            configurable: true,
+        });
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("Binary") } as any);
+        const enc = await SharedUtils.promptForUploadEncoding(profile as any, "some/path");
+        expect(showQuickPick).toHaveBeenCalled();
+        expect(enc).toEqual({ kind: "binary" });
+    });
+
+    it("returns text when EBCDIC is selected", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(undefined), update: jest.fn() },
+            configurable: true,
+        });
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("EBCDIC") } as any);
+        const enc = await SharedUtils.promptForUploadEncoding(profile as any, "some/path");
+        expect(enc).toEqual({ kind: "text" });
+        expect(showQuickPick).toHaveBeenCalled();
+    });
+
+    it("prompts for codepage when Other is selected and stores it in history", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue([]), update: jest.fn() },
+            configurable: true,
+        });
+        jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("Other") } as any);
+        jest.spyOn(Gui, "showInputBox").mockResolvedValue("IBM-1047");
+        const setValueSpy = jest.spyOn(ZoweLocalStorage, "setValue").mockResolvedValueOnce(undefined);
+        const enc = await SharedUtils.promptForUploadEncoding(profile as any, "some/path");
+        expect(enc).toEqual({ kind: "other", codepage: "IBM-1047" });
+        expect(setValueSpy).toHaveBeenCalled();
+    });
+});
+
+describe("Shared utils unit tests - function promptForDownloadEncoding", () => {
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it("returns binary when Binary is selected", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(undefined), update: jest.fn() },
+            configurable: true,
+        });
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("Binary") } as any);
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+        expect(showQuickPick).toHaveBeenCalled();
+        expect(enc).toEqual({ kind: "binary" });
+    });
+
+    it("returns text when EBCDIC is selected", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(undefined), update: jest.fn() },
+            configurable: true,
+        });
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("EBCDIC") } as any);
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+        expect(enc).toEqual({ kind: "text" });
+        expect(showQuickPick).toHaveBeenCalled();
+    });
+
+    it("prompts for codepage when Other is selected and stores it in history", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue([]), update: jest.fn() },
+            configurable: true,
+        });
+        jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("Other") } as any);
+        jest.spyOn(Gui, "showInputBox").mockResolvedValue("ISO8859-1");
+        const setValueSpy = jest.spyOn(ZoweLocalStorage, "setValue").mockResolvedValueOnce(undefined);
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+        expect(enc).toEqual({ kind: "other", codepage: "ISO8859-1" });
+        expect(setValueSpy).toHaveBeenCalled();
+    });
+
+    it("returns undefined when user cancels selection", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(undefined), update: jest.fn() },
+            configurable: true,
+        });
+        jest.spyOn(Gui, "showQuickPick").mockResolvedValue(undefined);
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+        expect(enc).toBeUndefined();
+    });
+
+    it("returns undefined when user cancels codepage input", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue([]), update: jest.fn() },
+            configurable: true,
+        });
+        jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: vscode.l10n.t("Other") } as any);
+        jest.spyOn(Gui, "showInputBox").mockResolvedValue(undefined);
+        jest.spyOn(Gui, "infoMessage").mockResolvedValue(undefined);
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+        expect(enc).toBeUndefined();
+    });
+
+    it("uses profile encoding in options when available", async () => {
+        const profile = createIProfile();
+        if (profile.profile) {
+            profile.profile.encoding = "IBM-037";
+        }
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue([]), update: jest.fn() },
+            configurable: true,
+        });
+        const mockShowQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: "IBM-037" } as any);
+
+        const enc = await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+
+        const callArgs = mockShowQuickPick.mock.calls[0][0] as any[];
+        const profileEncodingOption = callArgs.find((item: any) => item.label === "IBM-037");
+        expect(profileEncodingOption).toBeDefined();
+        expect(profileEncodingOption.description).toContain("From profile");
+        expect(enc).toEqual({ kind: "other", codepage: "IBM-037" });
+    });
+
+    it("includes encoding history in options", async () => {
+        const profile = createIProfile();
+        Object.defineProperty(ZoweLocalStorage, "globalState", {
+            value: { get: jest.fn().mockReturnValue(["IBM-1047", "ISO8859-1"]), update: jest.fn() },
+            configurable: true,
+        });
+        jest.spyOn(ZoweLocalStorage, "getValue").mockReturnValue(["IBM-1047", "ISO8859-1"]);
+        const mockShowQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue({ label: "IBM-1047" } as any);
+
+        await SharedUtils.promptForDownloadEncoding(profile as any, "TEST.DS");
+
+        const callArgs = mockShowQuickPick.mock.calls[0][0] as any[];
+        expect(callArgs.some((item: any) => item.label === "IBM-1047")).toBe(true);
+        expect(callArgs.some((item: any) => item.label === "ISO8859-1")).toBe(true);
+    });
+});
+
+describe("Shared utils unit tests - function getCachedEncoding", () => {
+    const mockSession = createISession();
+    const mockProfile = createIProfile();
+    describe("Spool nodes", () => {
+        it("correctly returns the cached encoding for binary", async () => {
+            const sessionNode = createJobSessionNode(mockSession, mockProfile);
+            const jobNode = new ZoweJobNode({
+                label: "TESTPS",
+                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const node = new ZoweSpoolNode({
+                label: "testFile",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: jobNode,
+                spool: createIJobFile(),
+            });
+            const encoding = { kind: "binary" };
+
+            const encodingMapSpy = jest.spyOn(node, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(node);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(node.resourceUri?.path);
+            expect(response).toEqual(encoding.kind);
+        });
+
+        it("correctly returns the cached encoding for text", async () => {
+            const sessionNode = createJobSessionNode(mockSession, mockProfile);
+            const jobNode = new ZoweJobNode({
+                label: "TESTPS",
+                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const node = new ZoweSpoolNode({
+                label: "testFile",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: jobNode,
+                spool: createIJobFile(),
+            });
+            const encoding = { kind: "text" };
+
+            const encodingMapSpy = jest.spyOn(node, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(node);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(node.resourceUri?.path);
+            expect(response).toEqual(encoding.kind);
+        });
+
+        it("correctly returns the cached encoding for other", async () => {
+            const sessionNode = createJobSessionNode(mockSession, mockProfile);
+            const jobNode = new ZoweJobNode({
+                label: "TESTPS",
+                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const node = new ZoweSpoolNode({
+                label: "testFile",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: jobNode,
+                spool: createIJobFile(),
+            });
+            const encoding = { kind: "other", codepage: "IBM-1147" };
+
+            const encodingMapSpy = jest.spyOn(node, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(node);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(node.resourceUri?.path);
+            expect(response).toEqual(encoding.codepage);
+        });
+
+        it("correctly returns the cached encoding for undefined", async () => {
+            const sessionNode = createJobSessionNode(mockSession, mockProfile);
+            const jobNode = new ZoweJobNode({
+                label: "TESTPS",
+                collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const node = new ZoweSpoolNode({
+                label: "testFile",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: jobNode,
+                spool: createIJobFile(),
+            });
+            const encoding = undefined;
+
+            const encodingMapSpy = jest.spyOn(node, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(node);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(node.resourceUri?.path);
+            expect(response).toEqual(encoding);
+        });
+    });
+
+    describe("USS nodes", () => {
+        it("correctly returns the cached encoding for binary", async () => {
+            const sessionNode = createUSSSessionNode(mockSession, mockProfile);
+            const ussNode = new ZoweUSSNode({
+                label: "TEST.PS",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                contextOverride: Constants.USS_BINARY_FILE_CONTEXT,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const encoding = { kind: "binary" };
+
+            const encodingMapSpy = jest.spyOn(ussNode, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(ussNode);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(ussNode.resourceUri?.path);
+            expect(response).toEqual(encoding.kind);
+        });
+
+        it("correctly returns the cached encoding for text", async () => {
+            const sessionNode = createUSSSessionNode(mockSession, mockProfile);
+            const ussNode = new ZoweUSSNode({
+                label: "TEST.PS",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                contextOverride: Constants.USS_TEXT_FILE_CONTEXT,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const encoding = { kind: "text" };
+
+            const encodingMapSpy = jest.spyOn(ussNode, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(ussNode);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(ussNode.resourceUri?.path);
+            expect(response).toEqual(encoding.kind);
+        });
+
+        it("correctly returns the cached encoding for other", async () => {
+            const sessionNode = createUSSSessionNode(mockSession, mockProfile);
+            const ussNode = new ZoweUSSNode({
+                label: "TEST.PS",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                contextOverride: Constants.USS_TEXT_FILE_CONTEXT,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const encoding = { kind: "other", codepage: "IBM-1147" };
+
+            const encodingMapSpy = jest.spyOn(ussNode, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(ussNode);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(ussNode.resourceUri?.path);
+            expect(response).toEqual(encoding.codepage);
+        });
+
+        it("correctly returns the cached encoding for undefined", async () => {
+            const sessionNode = createUSSSessionNode(mockSession, mockProfile);
+            const ussNode = new ZoweUSSNode({
+                label: "TEST.PS",
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                contextOverride: Constants.USS_TEXT_FILE_CONTEXT,
+                session: mockSession,
+                profile: mockProfile,
+                parentNode: sessionNode,
+            });
+            const encoding = undefined;
+
+            const encodingMapSpy = jest.spyOn(ussNode, "getEncodingInMap").mockResolvedValue(encoding);
+            const response = await SharedUtils.getCachedEncoding(ussNode);
+
+            expect(encodingMapSpy).toHaveBeenCalledWith(ussNode.resourceUri?.path);
+            expect(response).toEqual(encoding);
+        });
+    });
+
+    describe("Dataset nodes", () => {
+        describe("Sequential", () => {
+            it("correctly returns the cached encoding for binary", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_DS_BINARY_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const encoding = { kind: "binary" };
+
+                const encodingMapSpy = jest.spyOn(dsNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(dsNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(dsNode.resourceUri?.path);
+                expect(response).toEqual(encoding.kind);
+            });
+
+            it("correctly returns the cached encoding for text", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_DS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const encoding = { kind: "test" };
+
+                const encodingMapSpy = jest.spyOn(dsNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(dsNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(dsNode.resourceUri?.path);
+                expect(response).toEqual(encoding.kind);
+            });
+
+            it("correctly returns the cached encoding for other", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_DS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const encoding = { kind: "other", codepage: "IBM-1147" };
+
+                const encodingMapSpy = jest.spyOn(dsNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(dsNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(dsNode.resourceUri?.path);
+                expect(response).toEqual(encoding.codepage);
+            });
+
+            it("correctly returns the cached encoding for undefined", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_DS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const encoding = undefined;
+
+                const encodingMapSpy = jest.spyOn(dsNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(dsNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(dsNode.resourceUri?.path);
+                expect(response).toEqual(encoding);
+            });
+        });
+
+        describe("Partitioned", () => {
+            it("correctly returns the cached encoding for binary", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PDS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                    contextOverride: Constants.DS_PDS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const memNode = new ZoweDatasetNode({
+                    label: "TESTMEM",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_MEMBER_BINARY_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: dsNode,
+                });
+                const encoding = { kind: "binary" };
+
+                const encodingMapSpy = jest.spyOn(memNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(memNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(memNode.resourceUri?.path);
+                expect(response).toEqual(encoding.kind);
+            });
+
+            it("correctly returns the cached encoding for text", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PDS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                    contextOverride: Constants.DS_PDS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const memNode = new ZoweDatasetNode({
+                    label: "TESTMEM",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_MEMBER_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: dsNode,
+                });
+                const encoding = { kind: "text" };
+
+                const encodingMapSpy = jest.spyOn(memNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(memNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(memNode.resourceUri?.path);
+                expect(response).toEqual(encoding.kind);
+            });
+
+            it("correctly returns the cached encoding for other", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PDS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                    contextOverride: Constants.DS_PDS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const memNode = new ZoweDatasetNode({
+                    label: "TESTMEM",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_MEMBER_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: dsNode,
+                });
+                const encoding = { kind: "other", codepage: "IBM-1147" };
+
+                const encodingMapSpy = jest.spyOn(memNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(memNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(memNode.resourceUri?.path);
+                expect(response).toEqual(encoding.codepage);
+            });
+
+            it("correctly returns the cached encoding for undefined", async () => {
+                const sessionNode = createDatasetSessionNode(mockSession, mockProfile);
+                const dsNode = new ZoweDatasetNode({
+                    label: "TEST.PDS",
+                    collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+                    contextOverride: Constants.DS_PDS_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: sessionNode,
+                });
+                const memNode = new ZoweDatasetNode({
+                    label: "TESTMEM",
+                    collapsibleState: vscode.TreeItemCollapsibleState.None,
+                    contextOverride: Constants.DS_MEMBER_CONTEXT,
+                    session: mockSession,
+                    profile: mockProfile,
+                    parentNode: dsNode,
+                });
+                const encoding = undefined;
+
+                const encodingMapSpy = jest.spyOn(memNode, "getEncodingInMap").mockResolvedValue(encoding);
+                const response = await SharedUtils.getCachedEncoding(memNode);
+
+                expect(encodingMapSpy).toHaveBeenCalledWith(memNode.resourceUri?.path);
+                expect(response).toEqual(encoding);
+            });
+        });
+    });
+});
+
+describe("Shared utils unit tests - function parseFavorites", () => {
+    it("correctly parses a saved favorite", () => {
+        const favData = SharedUtils.parseFavorites(["[testProfile]: favoriteDir{directory}"]);
+        expect(favData[0]).toStrictEqual({
+            profileName: "testProfile",
+            label: "favoriteDir",
+            contextValue: "directory",
+        });
+    });
+
+    it("filters out an incomplete favorite entry (missing label and context)", () => {
+        const warnSpy = jest.spyOn(ZoweLogger, "warn");
+        const favData = SharedUtils.parseFavorites(["[testProfile]: "]);
+        expect(favData.length).toBe(0);
+        expect(warnSpy).toHaveBeenCalledWith("Failed to parse a saved favorite. Attempted to parse: [testProfile]: ");
+    });
+});
+
+describe("Shared utils unit tests - function addToWorkspace", () => {
+    it("adds a Data Set resource to the workspace", () => {
+        const datasetNode = new ZoweDatasetNode({
+            label: "EXAMPLE.PDS",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.DS_PDS_CONTEXT,
+            profile: createIProfile(),
+        });
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        SharedUtils.addToWorkspace(datasetNode, null as any);
+        expect(updateWorkspaceFoldersMock).toHaveBeenCalledWith(0, null, {
+            uri: datasetNode.resourceUri,
+            name: `[sestest] ${datasetNode.label as string}`,
+        });
+    });
+    it("adds a USS resource to the workspace", () => {
+        const ussNode = new ZoweUSSNode({
+            label: "textFile.txt",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            contextOverride: Constants.USS_TEXT_FILE_CONTEXT,
+            profile: createIProfile(),
+        });
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        SharedUtils.addToWorkspace(ussNode, null as any);
+        expect(updateWorkspaceFoldersMock).toHaveBeenCalledWith(0, null, { uri: ussNode.resourceUri, name: `[sestest] ${ussNode.fullPath}` });
+    });
+    it("adds multiple resources to the workspace at once", () => {
+        const datasetNode1 = new ZoweDatasetNode({
+            label: "EXAMPLE.PDS1",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.DS_PDS_CONTEXT,
+            profile: createIProfile(),
+        });
+        const datasetNode2 = new ZoweDatasetNode({
+            label: "EXAMPLE.PDS2",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.DS_PDS_CONTEXT,
+            profile: createIProfile(),
+        });
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        SharedUtils.addToWorkspace(null as any, [datasetNode1, datasetNode2]);
+        expect(updateWorkspaceFoldersMock).toHaveBeenCalledWith(
+            0,
+            null,
+            {
+                uri: datasetNode1.resourceUri,
+                name: `[sestest] ${datasetNode1.label as string}`,
+            },
+            {
+                uri: datasetNode2.resourceUri,
+                name: `[sestest] ${datasetNode2.label as string}`,
+            }
+        );
+    });
+    it("adds a USS session w/ fullPath to the workspace", () => {
+        const ussNode = new ZoweUSSNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            contextOverride: Constants.USS_SESSION_CONTEXT,
+            profile: createIProfile(),
+            session: createISession(),
+        });
+        ussNode.fullPath = "/u/users/smpluser";
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        SharedUtils.addToWorkspace(ussNode, null as any);
+        expect(updateWorkspaceFoldersMock).toHaveBeenCalledWith(0, null, {
+            uri: ussNode.resourceUri?.with({ path: `/sestest${ussNode.fullPath}` }),
+            name: `[${ussNode.label as string}] ${ussNode.fullPath}`,
+        });
+    });
+    it("displays an info message when adding a USS session w/o fullPath", () => {
+        const ussNode = new ZoweUSSNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            contextOverride: Constants.USS_SESSION_CONTEXT,
+            profile: createIProfile(),
+            session: createISession(),
+        });
+        ussNode.fullPath = "";
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        const infoMessageSpy = jest.spyOn(Gui, "infoMessage");
+        updateWorkspaceFoldersMock.mockClear();
+        SharedUtils.addToWorkspace(ussNode, null as any);
+        expect(updateWorkspaceFoldersMock).not.toHaveBeenCalledWith(0, null, {
+            uri: ussNode.resourceUri?.with({ path: `/sestest${ussNode.fullPath}` }),
+            name: `[${ussNode.label as string}] ${ussNode.fullPath}`,
+        });
+        expect(infoMessageSpy).toHaveBeenCalledWith("A search must be set for sestest before it can be added to a workspace.");
+    });
+    it("skips adding a resource that's already in the workspace", () => {
+        const ussNode = new ZoweUSSNode({
+            label: "testFolder",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            contextOverride: Constants.USS_DIR_CONTEXT,
+            profile: createIProfile(),
+        });
+        const workspaceFolders = new MockedProperty(vscode.workspace, "workspaceFolders", {
+            value: [{ uri: ussNode.resourceUri, name: ussNode.label }],
+        });
+        const updateWorkspaceFoldersMock = jest.spyOn(vscode.workspace, "updateWorkspaceFolders").mockImplementation();
+        updateWorkspaceFoldersMock.mockClear();
+        SharedUtils.addToWorkspace(ussNode, null as any);
+        expect(updateWorkspaceFoldersMock).not.toHaveBeenCalledWith(0, null, {
+            uri: ussNode.resourceUri,
+            name: `[sestest] ${ussNode.fullPath}`,
+        });
+        workspaceFolders[Symbol.dispose]();
+    });
+});
+
+describe("Shared utils unit tests - function copyExternalLink", () => {
+    it("does nothing for an invalid node or one without a resource URI", async () => {
+        const copyClipboardMock = jest.spyOn(vscode.env.clipboard, "writeText");
+        const ussNode = createUSSNode(createISession(), createIProfile());
+        ussNode.resourceUri = undefined;
+        await SharedUtils.copyExternalLink({ extension: { id: "Zowe.vscode-extension-for-zowe" } } as any, ussNode);
+        expect(copyClipboardMock).not.toHaveBeenCalled();
+    });
+
+    it("copies a link for a node with a resource URI", async () => {
+        const copyClipboardMock = jest.spyOn(vscode.env.clipboard, "writeText");
+        const ussNode = createUSSNode(createISession(), createIProfile());
+        await SharedUtils.copyExternalLink({ extension: { id: "Zowe.vscode-extension-for-zowe" } } as any, ussNode);
+        expect(copyClipboardMock).toHaveBeenCalledWith(`vscode://Zowe.vscode-extension-for-zowe?${ussNode.resourceUri?.toString()}`);
+    });
+});
+
+describe("Shared utils unit tests - function debounce", () => {
+    beforeAll(() => {
+        jest.useFakeTimers();
+    });
+
+    afterAll(() => {
+        jest.useRealTimers();
+    });
+
+    it("executes a function twice when time between calls is long", () => {
+        const mockEventHandler = jest.fn();
+        const debouncedFn = SharedUtils.debounce(mockEventHandler, 100);
+        debouncedFn();
+        jest.runAllTimers();
+        debouncedFn();
+        jest.runAllTimers();
+        expect(mockEventHandler).toHaveBeenCalledTimes(2);
+    });
+
+    it("executes a function only once when time between calls is short", () => {
+        const mockEventHandler = jest.fn();
+        const debouncedFn = SharedUtils.debounce(mockEventHandler, 100);
+        debouncedFn();
+        jest.advanceTimersByTime(10);
+        debouncedFn();
+        jest.runAllTimers();
+        expect(mockEventHandler).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("Shared utils unit tests - updateSortOptionsWithDefault", () => {
+    it("should add (default) to the correct sort option", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const sortMethod = 2; // Date Modified
+
+        SharedUtils.updateSortOptionsWithDefault(sortMethod, sortOptions);
+
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified (default)", "User ID"]);
+    });
+
+    it("should remove existing (default) from other sort options", () => {
+        const sortOptions = ["Name (default)", "Date Created", "Date Modified", "User ID"];
+        const sortMethod = 2; // Date Modified
+
+        SharedUtils.updateSortOptionsWithDefault(sortMethod, sortOptions);
+
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified (default)", "User ID"]);
+    });
+
+    it("should handle empty sort options array", () => {
+        const sortOptions: string[] = [];
+        const sortMethod = 0; // Any index
+
+        SharedUtils.updateSortOptionsWithDefault(sortMethod, sortOptions);
+
+        expect(sortOptions).toEqual([]);
+    });
+
+    it("should handle sort method out of bounds", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const sortMethod = 10; // Out of bounds
+
+        SharedUtils.updateSortOptionsWithDefault(sortMethod, sortOptions);
+
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified", "User ID"]);
+    });
+
+    it("should handle sort method as string", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const sortMethod = "2"; // Date Modified
+
+        SharedUtils.updateSortOptionsWithDefault(sortMethod, sortOptions);
+
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified (default)", "User ID"]);
+    });
+});
+
+describe("Shared utils unit tests - getDefaultSortOptions", () => {
+    it("should return default sort options when settings are not defined", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const settingsKey = "defaultSort";
+        const sortMethod = {
+            Name: 0,
+            DateCreated: 1,
+            DateModified: 2,
+            UserId: 3,
+        };
+
+        jest.spyOn(SettingsConfig, "getDirectValue").mockReturnValueOnce(undefined);
+
+        const result = SharedUtils.getDefaultSortOptions(sortOptions, settingsKey, sortMethod);
+
+        expect(result).toEqual({
+            method: sortMethod.Name,
+            direction: Sorting.SortDirection.Ascending,
+        });
+    });
+
+    it("should return sort options from settings with default sort option marked", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const settingsKey = "defaultSort";
+        const sortMethod = {
+            Name: 0,
+            DateCreated: 1,
+            DateModified: 2,
+            UserId: 3,
+        };
+
+        jest.spyOn(SettingsConfig, "getDirectValue").mockReturnValueOnce({
+            method: "DateModified",
+            direction: "Descending",
+        });
+
+        const result = SharedUtils.getDefaultSortOptions(sortOptions, settingsKey, sortMethod);
+
+        expect(result).toEqual({
+            method: sortMethod.DateModified,
+            direction: Sorting.SortDirection.Descending,
+        });
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified (default)", "User ID"]);
+    });
+
+    it("should handle string sort method and direction from settings", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const settingsKey = "defaultSort";
+        const sortMethod = {
+            Name: 0,
+            DateCreated: 1,
+            DateModified: 2,
+            UserId: 3,
+        };
+
+        jest.spyOn(SettingsConfig, "getDirectValue").mockReturnValueOnce({
+            method: "UserId",
+            direction: "Ascending",
+        });
+
+        const result = SharedUtils.getDefaultSortOptions(sortOptions, settingsKey, sortMethod);
+
+        expect(result).toEqual({
+            method: sortMethod.UserId,
+            direction: Sorting.SortDirection.Ascending,
+        });
+        expect(sortOptions).toEqual(["Name", "Date Created", "Date Modified", "User ID (default)"]);
+    });
+
+    it("should handle invalid sort method and direction from settings", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const settingsKey = "defaultSort";
+        const sortMethod = {
+            Name: 0,
+            DateCreated: 1,
+            DateModified: 2,
+            UserId: 3,
+        };
+
+        jest.spyOn(SettingsConfig, "getDirectValue").mockReturnValueOnce({
+            method: "InvalidMethod",
+            direction: "InvalidDirection",
+        });
+
+        const result = SharedUtils.getDefaultSortOptions(sortOptions, settingsKey, sortMethod);
+
+        expect(result).toEqual({
+            method: sortMethod.Name,
+            direction: Sorting.SortDirection.Ascending,
+        });
+        expect(sortOptions).toEqual(["Name (default)", "Date Created", "Date Modified", "User ID"]);
+    });
+
+    it("should handle missing sort method and direction from settings", () => {
+        const sortOptions = ["Name", "Date Created", "Date Modified", "User ID"];
+        const settingsKey = "defaultSort";
+        const sortMethod = {
+            Name: 0,
+            DateCreated: 1,
+            DateModified: 2,
+            UserId: 3,
+        };
+
+        jest.spyOn(SettingsConfig, "getDirectValue").mockReturnValueOnce({
+            method: undefined,
+            direction: undefined,
+        });
+
+        const result = SharedUtils.getDefaultSortOptions(sortOptions, settingsKey, sortMethod);
+
+        expect(result).toEqual({
+            method: sortMethod.Name,
+            direction: Sorting.SortDirection.Ascending,
+        });
+        expect(sortOptions).toEqual(["Name (default)", "Date Created", "Date Modified", "User ID"]);
+    });
+});
+
+describe("Shared utils unit tests - function debounceAsync", () => {
+    beforeAll(() => {
+        jest.useFakeTimers();
+    });
+
+    afterAll(() => {
+        jest.useRealTimers();
+    });
+
+    it("executes a function twice when time between calls is long", async () => {
+        const mockEventHandler = jest.fn().mockResolvedValue(undefined);
+        const debouncedFn = SharedUtils.debounceAsync(mockEventHandler, 100);
+        void debouncedFn();
+        jest.runAllTimers();
+        void debouncedFn();
+        jest.runAllTimers();
+        expect(mockEventHandler).toHaveBeenCalledTimes(2);
+    });
+
+    it("executes a function only once when time between calls is short", async () => {
+        const mockEventHandler = jest.fn().mockResolvedValue(undefined);
+        const debouncedFn = SharedUtils.debounceAsync(mockEventHandler, 100);
+        void debouncedFn();
+        jest.advanceTimersByTime(10);
+        void debouncedFn();
+        jest.runAllTimers();
+        expect(mockEventHandler).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("SharedUtils.handleProfileChange", () => {
+    it("iterates over tree providers and updates profile on profile nodes", async () => {
+        const profile = createIProfile();
+        const newProfile = { ...profile, profile: { ...profile, user: "newuser", password: "newpass" } };
+        const dsSession = new ZoweDatasetNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.DS_SESSION_CONTEXT,
+            profile,
+        });
+        const ussSession = new ZoweUSSNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.USS_SESSION_CONTEXT,
+            profile,
+        });
+        const jobSession = new ZoweJobNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.JOBS_SESSION_CONTEXT,
+            profile,
+        });
+        const providers = {
+            ds: { getChildren: () => [dsSession] } as any,
+            uss: { getChildren: () => [ussSession] } as any,
+            job: { getChildren: () => [jobSession] } as any,
+        };
+        await SharedUtils.handleProfileChange(providers, newProfile);
+        // verify that nodes were updated with new data
+        expect(dsSession.getProfile().profile?.user).toBe(newProfile.profile.user);
+        expect(dsSession.getProfile().profile?.password).toBe(newProfile.profile.password);
+        expect(ussSession.getProfile().profile?.user).toBe(newProfile.profile.user);
+        expect(ussSession.getProfile().profile?.password).toBe(newProfile.profile.password);
+        expect(jobSession.getProfile().profile?.user).toBe(newProfile.profile.user);
+        expect(jobSession.getProfile().profile?.password).toBe(newProfile.profile.password);
+    });
+    it("logs an error if setProfileToChoice fails", async () => {
+        const profile = createIProfile();
+        const newProfile = { ...profile, profile: { ...profile, user: "newuser", password: "newpass" } };
+        const dsSession = new ZoweDatasetNode({
+            label: "sestest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            contextOverride: Constants.DS_SESSION_CONTEXT,
+            profile,
+        });
+        jest.spyOn(dsSession, "setProfileToChoice").mockImplementation(() => {
+            throw new Error("error while updating profile on node");
+        });
+        const providers = {
+            ds: { getChildren: () => [dsSession] } as any,
+            uss: { getChildren: () => [] } as any,
+            job: { getChildren: () => [] } as any,
+        };
+        const errorSpy = jest.spyOn(ZoweLogger, "error");
+        await SharedUtils.handleProfileChange(providers, newProfile);
+        // verify that nodes still have the old data as the `setProfileToChoice` function failed
+        expect(dsSession.getProfile().profile?.user).toBe(profile.profile?.user);
+        expect(dsSession.getProfile().profile?.password).toBe(profile.profile?.password);
+        expect(errorSpy).toHaveBeenCalledTimes(1);
+        expect(errorSpy).toHaveBeenCalledWith("error while updating profile on node");
+    });
+});
+
+describe("Shared utils unit tests - function promptForDirectoryEncoding", () => {
+    const binaryEncoding: ZosEncoding = { kind: "binary" };
+    const textEncoding: ZosEncoding = { kind: "text" };
+    const otherEncoding: ZosEncoding = { kind: "other", codepage: "IBM-1047" };
+
+    function createBlockMocks() {
+        const showInputBox = jest.spyOn(Gui, "showInputBox").mockResolvedValue(undefined);
+        const showQuickPick = jest.spyOn(Gui, "showQuickPick").mockResolvedValue(undefined);
+        const localStorageGet = jest.spyOn(ZoweLocalStorage, "getValue").mockReturnValue(undefined);
+        const localStorageSet = jest.spyOn(ZoweLocalStorage, "setValue").mockResolvedValue(undefined);
+        const infoMessage = jest.spyOn(Gui, "infoMessage").mockResolvedValue(undefined);
+
+        return {
+            profile: createIProfile(),
+            showInputBox,
+            showQuickPick,
+            localStorageGet,
+            localStorageSet,
+            infoMessage,
+        };
+    }
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it("returns auto-detect when Auto-detect option is selected", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Auto-detect from file tags") });
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(result).toEqual({ kind: "auto-detect" });
+    });
+
+    it("returns text encoding when EBCDIC is selected", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("EBCDIC") });
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(result).toEqual(textEncoding);
+    });
+
+    it("returns binary encoding when Binary is selected", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Binary") });
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(result).toEqual(binaryEncoding);
+    });
+
+    it("returns other encoding when Other is selected and codepage is provided", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Other") });
+        blockMocks.showInputBox.mockResolvedValueOnce("IBM-1047");
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(result).toEqual(otherEncoding);
+    });
+
+    it("returns undefined when Other is selected but no codepage is provided", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Other") });
+        blockMocks.showInputBox.mockResolvedValueOnce(undefined);
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(blockMocks.showInputBox).toHaveBeenCalled();
+        expect(blockMocks.infoMessage).toHaveBeenCalledWith(vscode.l10n.t("Operation cancelled"));
+        expect(result).toBeUndefined();
+    });
+
+    it("returns undefined when quick pick is cancelled", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce(undefined);
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        expect(result).toBeUndefined();
+    });
+
+    it("handles current directory encoding as auto-detect", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Binary") });
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path", { kind: "auto-detect" });
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const callArgs = blockMocks.showQuickPick.mock.calls[0][1];
+        expect(callArgs?.placeHolder).toContain(vscode.l10n.t("Auto-detect from file tags"));
+    });
+
+    it("handles current directory encoding as binary", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("EBCDIC") });
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path", binaryEncoding);
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const callArgs = blockMocks.showQuickPick.mock.calls[0][1];
+        expect(callArgs?.placeHolder).toContain(vscode.l10n.t("Binary"));
+    });
+
+    it("handles current directory encoding as text", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("EBCDIC") });
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path", textEncoding);
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const callArgs = blockMocks.showQuickPick.mock.calls[0][1];
+        expect(callArgs?.placeHolder).toContain(vscode.l10n.t("EBCDIC"));
+    });
+
+    it("handles current directory encoding as other codepage", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("EBCDIC") });
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path", otherEncoding);
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const callArgs = blockMocks.showQuickPick.mock.calls[0][1];
+        expect(callArgs?.placeHolder).toContain("OTHER-IBM-1047");
+    });
+
+    it("handles profile encoding in options", async () => {
+        const blockMocks = createBlockMocks();
+        (blockMocks.profile.profile as any).encoding = "IBM-1047";
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("EBCDIC") });
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const items = await blockMocks.showQuickPick.mock.calls[0][0];
+        expect(Array.isArray(items) && items.some((item: any) => item.label === "IBM-1047" && item.description.includes("From profile"))).toBe(true);
+    });
+
+    it("includes encoding history in options", async () => {
+        const blockMocks = createBlockMocks();
+        const encodingHistory = ["IBM-1147", "UTF-8"];
+        blockMocks.localStorageGet.mockReturnValueOnce(encodingHistory);
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: encodingHistory[0] });
+
+        const result = await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.showQuickPick).toHaveBeenCalled();
+        const items = await blockMocks.showQuickPick.mock.calls[0][0];
+        expect(Array.isArray(items) && items.some((item: any) => item.label === "IBM-1147")).toBe(true);
+        expect(result).toEqual({ kind: "other", codepage: "IBM-1147" });
+    });
+
+    it("saves custom encoding to history", async () => {
+        const blockMocks = createBlockMocks();
+        const existingHistory = ["IBM-1147"];
+        blockMocks.localStorageGet.mockReturnValueOnce(existingHistory);
+        blockMocks.showQuickPick.mockResolvedValueOnce({ label: vscode.l10n.t("Other") });
+        blockMocks.showInputBox.mockResolvedValueOnce("UTF-8");
+
+        await SharedUtils.promptForDirectoryEncoding(blockMocks.profile, "/test/path");
+
+        expect(blockMocks.localStorageSet).toHaveBeenCalledWith(expect.anything(), expect.arrayContaining(["UTF-8"]));
+    });
+});
+
+describe("Shared utils unit tests - function handleDownloadResponse", () => {
+    function createBlockMocks() {
+        const showMessage = jest.spyOn(Gui, "showMessage").mockResolvedValue(undefined);
+        const errorMessage = jest.spyOn(Gui, "errorMessage").mockResolvedValue(undefined);
+        const warningMessage = jest.spyOn(Gui, "warningMessage").mockResolvedValue(undefined);
+        const loggerTrace = jest.spyOn(ZoweLogger, "trace").mockReturnValue(undefined);
+        const loggerInfo = jest.spyOn(ZoweLogger, "info").mockReturnValue(undefined);
+        const loggerWarn = jest.spyOn(ZoweLogger, "warn").mockReturnValue(undefined);
+        const executeCommand = jest.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined);
+
+        return {
+            showMessage,
+            errorMessage,
+            warningMessage,
+            loggerTrace,
+            loggerInfo,
+            loggerWarn,
+            executeCommand,
+        };
+    }
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it("shows simple success message when response is falsy", async () => {
+        const blockMocks = createBlockMocks();
+
+        await SharedUtils.handleDownloadResponse(null, "File");
+
+        expect(blockMocks.showMessage).toHaveBeenCalledWith(vscode.l10n.t("{0} download completed.", "File"));
+    });
+
+    it("shows simple success message when response is undefined", async () => {
+        const blockMocks = createBlockMocks();
+
+        await SharedUtils.handleDownloadResponse(undefined, "Directory");
+
+        expect(blockMocks.showMessage).toHaveBeenCalledWith(vscode.l10n.t("{0} download completed.", "Directory"));
+    });
+
+    it("shows simple success message for successful response without warnings", async () => {
+        const blockMocks = createBlockMocks();
+        const response = { success: true };
+
+        await SharedUtils.handleDownloadResponse(response, "Data set");
+
+        expect(blockMocks.showMessage).toHaveBeenCalledWith(vscode.l10n.t("{0} downloaded successfully.", "Data set"));
+    });
+
+    it("shows error message when success is false", async () => {
+        const blockMocks = createBlockMocks();
+        const response = { success: false };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        const errorMsg = vscode.l10n.t("{0} download completed with errors.", "File");
+        const fullErrorMsg = vscode.l10n.t("{0}\n\nSome files may not have been downloaded.", errorMsg);
+        expect(blockMocks.errorMessage).toHaveBeenCalledWith(
+            fullErrorMsg,
+            expect.objectContaining({
+                items: [vscode.l10n.t("View Details")],
+                vsCodeOpts: { modal: false },
+            })
+        );
+    });
+
+    it("shows warning message when commandResponse contains 'already exists'", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: "file already exists and was skipped",
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.loggerInfo).toHaveBeenCalledWith("Download response details: file already exists and was skipped");
+        const successMsg = vscode.l10n.t("{0} downloaded successfully.", "File");
+        const warningMsg = vscode.l10n.t("{0}\n\nSome files may have been skipped.", successMsg);
+        expect(blockMocks.warningMessage).toHaveBeenCalledWith(
+            warningMsg,
+            expect.objectContaining({
+                items: [vscode.l10n.t("View Details")],
+                vsCodeOpts: { modal: false },
+            })
+        );
+    });
+
+    it("shows warning message when commandResponse contains 'skipped'", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: "some files were skipped",
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "Directory");
+
+        expect(blockMocks.warningMessage).toHaveBeenCalled();
+    });
+
+    it("shows error message when commandResponse contains 'failed'", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: "download failed for some items",
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.loggerInfo).toHaveBeenCalledWith("Download response details: download failed for some items");
+        expect(blockMocks.errorMessage).toHaveBeenCalled();
+    });
+
+    it("shows error message when commandResponse contains 'error'", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: "an error occurred during download",
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.errorMessage).toHaveBeenCalled();
+    });
+
+    it("handles apiResponse with failed items", async () => {
+        const blockMocks = createBlockMocks();
+        const failedItems = [
+            { name: "file1.txt", error: "Permission denied" },
+            { name: "file2.txt", status: "failed" },
+        ];
+        const response = {
+            success: true,
+            apiResponse: [{ name: "file3.txt", status: "success" }, ...failedItems],
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "Directory");
+
+        expect(blockMocks.loggerWarn).toHaveBeenCalledWith(`2 items failed to download: ${JSON.stringify(failedItems)}`);
+        expect(blockMocks.errorMessage).toHaveBeenCalled();
+    });
+
+    it("handles both commandResponse warnings and apiResponse errors", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: "some files were skipped",
+            apiResponse: [
+                { name: "file1.txt", error: "Failed" },
+                { name: "file2.txt", status: "success" },
+            ],
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.errorMessage).toHaveBeenCalled();
+    });
+
+    it("executes troubleshoot command when View Details is selected for errors", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.errorMessage.mockResolvedValueOnce(vscode.l10n.t("View Details"));
+        const response = { success: false };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.executeCommand).toHaveBeenCalledWith("zowe.troubleshootError", expect.any(CorrelatedError), expect.any(String));
+    });
+
+    it("executes troubleshoot command when View Details is selected for warnings", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.warningMessage.mockImplementation((_msg, _options) => {
+            return Promise.resolve(vscode.l10n.t("View Details"));
+        });
+        const response = {
+            success: true,
+            commandResponse: "file already exists",
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "Directory");
+
+        expect(blockMocks.executeCommand).toHaveBeenCalledWith("zowe.troubleshootError", expect.any(CorrelatedError), expect.any(String));
+    });
+
+    it("does not execute troubleshoot command when View Details is not selected", async () => {
+        const blockMocks = createBlockMocks();
+        blockMocks.errorMessage.mockResolvedValueOnce(undefined);
+        const response = { success: false };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it("handles complex response with all types of information", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: false,
+            commandResponse: "Some files failed to download and others were skipped because they already exist",
+            apiResponse: [
+                { name: "file1.txt", status: "success" },
+                { name: "file2.txt", error: "Permission denied" },
+                { name: "file3.txt", status: "failed" },
+            ],
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "Directory");
+
+        expect(blockMocks.loggerInfo).toHaveBeenCalled();
+        expect(blockMocks.loggerWarn).toHaveBeenCalled();
+        expect(blockMocks.errorMessage).toHaveBeenCalled();
+    });
+
+    it("handles numeric commandResponse correctly", async () => {
+        const blockMocks = createBlockMocks();
+        const response = {
+            success: true,
+            commandResponse: 12345,
+        };
+
+        await SharedUtils.handleDownloadResponse(response, "File");
+
+        expect(blockMocks.loggerInfo).toHaveBeenCalledWith("Download response details: 12345");
+        expect(blockMocks.showMessage).toHaveBeenCalledWith(vscode.l10n.t("{0} downloaded successfully.", "File"));
+    });
+});
+
+describe("SharedUtils helpers", () => {
+    const mockGetMvsApi = jest.fn();
+    let originalGetMvsApi: any;
+
+    beforeEach(() => {
+        jest.resetAllMocks();
+        jest.clearAllMocks();
+
+        originalGetMvsApi = (ZoweExplorerApiRegister as any).getMvsApi;
+        (ZoweExplorerApiRegister as any).getMvsApi = mockGetMvsApi;
+    });
+
+    afterEach(() => {
+        (ZoweExplorerApiRegister as any).getMvsApi = originalGetMvsApi;
+        jest.restoreAllMocks();
+    });
+
+    it("isSamePhysicalDataset returns true when dsname and vols match", async () => {
+        const srcProfile = { name: "SRC" } as any;
+        const dstProfile = { name: "DST" } as any;
+        const dsn = "USER.TEST.PDS";
+
+        const srcResp = {
+            apiResponse: {
+                items: [{ dsname: dsn, vols: ["VOL01", "VOL02"] }],
+            },
+        };
+        const dstResp = {
+            apiResponse: {
+                items: [{ dsname: dsn, vols: ["VOL02", "VOL01"] }],
+            },
+        };
+
+        const srcApi = { dataSet: jest.fn().mockResolvedValue(srcResp) };
+        const dstApi = { dataSet: jest.fn().mockResolvedValue(dstResp) };
+
+        mockGetMvsApi.mockImplementationOnce(() => srcApi);
+        mockGetMvsApi.mockImplementationOnce(() => dstApi);
+
+        const same = await SharedUtils.isSamePhysicalDataset(srcProfile, dstProfile, dsn);
+        expect(same).toBe(true);
+
+        expect(srcApi.dataSet).toHaveBeenCalled();
+        expect(dstApi.dataSet).toHaveBeenCalled();
+        expect(mockGetMvsApi).toHaveBeenCalledTimes(2);
+    });
+
+    it("isSamePhysicalDataset returns false when dst dataset missing", async () => {
+        const srcProfile = { name: "SRC" } as any;
+        const dstProfile = { name: "DST" } as any;
+        const dsn = "NON.EXISTENT";
+
+        const srcApi = { dataSet: jest.fn().mockResolvedValue({ apiResponse: { items: [{ dsname: dsn, vols: "VOL01" }] } }) };
+        const dstApi = { dataSet: jest.fn().mockResolvedValue({ apiResponse: { items: [] } }) };
+
+        mockGetMvsApi.mockImplementationOnce(() => srcApi);
+        mockGetMvsApi.mockImplementationOnce(() => dstApi);
+
+        const same = await SharedUtils.isSamePhysicalDataset(srcProfile, dstProfile, dsn);
+        expect(same).toBe(false);
+
+        expect(srcApi.dataSet).toHaveBeenCalled();
+        expect(dstApi.dataSet).toHaveBeenCalled();
+    });
+
+    it("getNodeProperty works for string and nested object", () => {
+        const node1 = { label: "SOME_LABEL" } as any;
+        // direct string prop
+        expect(SharedUtils.getNodeProperty(node1, "label")).toEqual("SOME_LABEL");
+        // not found returns null
+        expect(SharedUtils.getNodeProperty({}, "label")).toBeNull();
+        // nested property extraction, when value is an object and prop exists on it
+        const node3 = { label: { label: "INNER" } } as any;
+        expect(SharedUtils.getNodeProperty(node3, "label")).toEqual("INNER");
+    });
+
+    it("hasNameCollision detects case-insensitive collisions", () => {
+        const src = ["one", "Two", "Three "];
+        const dst = ["ONE", "two"];
+        expect(SharedUtils.hasNameCollision(src, dst)).toBe(true);
+
+        const src2 = ["alpha", "beta"];
+        const dst2 = ["gamma", "delta"];
+        expect(SharedUtils.hasNameCollision(src2, dst2)).toBe(false);
+    });
+
+    it("isLikelySameUssObjectByUris normalizes and compares paths", async () => {
+        const srcNode = { fullPath: "/u/foo/bar" } as any;
+        const targetParent = { fullPath: "/u/foo" } as any;
+        const label = "bar";
+        expect(await SharedUtils.isLikelySameUssObjectByUris(srcNode, targetParent, label)).toBe(true);
+        expect(await SharedUtils.isLikelySameUssObjectByUris({ fullPath: "/u/other" } as any, targetParent, "bar")).toBe(false);
+    });
+
+    describe("showMultiSelectQuickPick", () => {
+        let mockQuickPick: any;
+
+        beforeEach(() => {
+            mockQuickPick = {
+                title: "",
+                placeholder: "",
+                ignoreFocusOut: false,
+                canSelectMany: false,
+                items: [],
+                selectedItems: [],
+                onDidAccept: jest.fn(),
+                onDidHide: jest.fn(),
+                show: jest.fn(),
+                hide: jest.fn(),
+                dispose: jest.fn(),
+            };
+            jest.spyOn(Gui, "createQuickPick").mockReturnValue(mockQuickPick as any);
+        });
+
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        it("returns selected items when the user accepts", async () => {
+            const items: vscode.QuickPickItem[] = [
+                { label: "Option A", picked: true },
+                { label: "Option B", picked: false },
+            ];
+
+            mockQuickPick.onDidAccept.mockImplementation((cb: () => void) => {
+                mockQuickPick.selectedItems = [items[0]];
+                cb();
+            });
+
+            const result = await SharedUtils.showMultiSelectQuickPick(items, {
+                title: "Test Title",
+                placeholder: "Test Placeholder",
+            });
+
+            expect(result).toEqual([items[0]]);
+            expect(mockQuickPick.title).toBe("Test Title");
+            expect(mockQuickPick.placeholder).toBe("Test Placeholder");
+            expect(mockQuickPick.ignoreFocusOut).toBe(true);
+            expect(mockQuickPick.canSelectMany).toBe(true);
+            expect(mockQuickPick.show).toHaveBeenCalled();
+            expect(mockQuickPick.dispose).toHaveBeenCalled();
+        });
+
+        it("returns null when the user dismisses the quick pick", async () => {
+            const items: vscode.QuickPickItem[] = [{ label: "Option A" }];
+
+            mockQuickPick.onDidHide.mockImplementation((cb: () => void) => {
+                cb();
+            });
+
+            const result = await SharedUtils.showMultiSelectQuickPick(items, {
+                title: "Test Title",
+                placeholder: "Test Placeholder",
+            });
+
+            expect(result).toBeNull();
+            expect(mockQuickPick.dispose).toHaveBeenCalled();
+        });
+
+        it("pre-selects items that have picked set to true", async () => {
+            const items: vscode.QuickPickItem[] = [
+                { label: "Option A", picked: true },
+                { label: "Option B", picked: true },
+                { label: "Option C", picked: false },
+            ];
+
+            mockQuickPick.onDidAccept.mockImplementation((cb: () => void) => {
+                mockQuickPick.selectedItems = [items[0], items[1]];
+                cb();
+            });
+
+            const result = await SharedUtils.showMultiSelectQuickPick(items, {
+                title: "Test",
+                placeholder: "Test",
+            });
+
+            expect(result).toEqual([items[0], items[1]]);
+            // Verify selectedItems were set from picked items
+            expect(mockQuickPick.selectedItems).toEqual([items[0], items[1]]);
+        });
+
+        it("returns empty array when user accepts with no selections", async () => {
+            const items: vscode.QuickPickItem[] = [
+                { label: "Option A", picked: false },
+                { label: "Option B", picked: false },
+            ];
+
+            mockQuickPick.onDidAccept.mockImplementation((cb: () => void) => {
+                mockQuickPick.selectedItems = [];
+                cb();
+            });
+
+            const result = await SharedUtils.showMultiSelectQuickPick(items, {
+                title: "Test",
+                placeholder: "Test",
+            });
+
+            expect(result).toEqual([]);
+        });
+    });
+});

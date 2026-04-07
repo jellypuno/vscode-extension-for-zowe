@@ -1,0 +1,39 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Zosmf API tests should test putContent method passes all options to Zowe api method 1`] = `
+{
+  "encoding": "285",
+  "responseTimeout": undefined,
+}
+`;
+
+exports[`Zosmf API tests should test that copy data set uses default options 1`] = `
+{
+  "from-dataset": {
+    "dsn": "IBM.FROM",
+    "member": "IEFBR14",
+  },
+  "responseTimeout": undefined,
+}
+`;
+
+exports[`Zosmf API tests should test that copy data set uses enq 1`] = `
+{
+  "enq": "SHR",
+  "from-dataset": {
+    "dsn": "BROADCOM.FROM",
+  },
+  "responseTimeout": undefined,
+}
+`;
+
+exports[`Zosmf API tests should test that copy data set uses enq only 1`] = `
+{
+  "enq": "SHR",
+  "from-dataset": {
+    "dsn": "IBM.FROM",
+    "member": "IEFBR14",
+  },
+  "responseTimeout": undefined,
+}
+`;

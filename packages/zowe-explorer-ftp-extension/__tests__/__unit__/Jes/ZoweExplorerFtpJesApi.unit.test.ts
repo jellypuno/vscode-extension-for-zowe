@@ -16,44 +16,45 @@
 import { FtpJesApi } from "../../../src/ZoweExplorerFtpJesApi";
 import { DataSetUtils, JobUtils } from "@zowe/zos-ftp-for-zowe-cli";
 import TestUtils from "../utils/TestUtils";
-import { DownloadJobs, imperative } from "@zowe/cli";
-import { ZoweLogger, sessionMap } from "../../../src/extension";
+import { imperative } from "@zowe/zowe-explorer-api";
+import * as globals from "../../../src/globals";
 import { ZoweFtpExtensionError } from "../../../src/ZoweFtpExtensionError";
 
 // two methods to mock modules: create a __mocks__ file for zowe-explorer-api.ts and direct mock for extension.ts
 jest.mock("../../../__mocks__/@zowe/zowe-explorer-api.ts");
 jest.mock("../../../src/extension.ts");
 
-const JesApi = new FtpJesApi();
-
 describe("FtpJesApi", () => {
+    let JesApi: FtpJesApi;
     beforeAll(() => {
+        const profile: imperative.IProfileLoaded = { message: "", type: "zftp", failNotFound: false, profile: { host: "example.com", port: 22 } };
+        JesApi = new FtpJesApi(profile);
         JesApi.checkedProfile = jest.fn().mockReturnValue({ message: "success", type: "zftp", failNotFound: false });
         JesApi.ftpClient = jest.fn().mockReturnValue({ host: "", user: "", password: "", port: "" });
         JesApi.releaseConnection = jest.fn();
-        sessionMap.get = jest.fn().mockReturnValue({ jesListConnection: { connected: true } });
-        ZoweLogger.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
+        globals.SESSION_MAP.get = jest.fn().mockReturnValue({ jesListConnection: { isConnected: () => true } });
+        globals.LOGGER.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
     });
 
     it("should list jobs by owner and prefix.", async () => {
         const response = [
-            { jobid: "123", jobname: "JOB1" },
-            { jobid: "234", jonname: "JOB2" },
+            { jobId: "123", jobName: "JOB1" },
+            { jobId: "234", jobName: "JOB2" },
         ];
         JobUtils.listJobs = jest.fn().mockReturnValue(response);
         const mockParams = {
             owner: "IBMUSER",
             prefix: "*",
         };
-        const result = await JesApi.getJobsByOwnerAndPrefix(mockParams.owner, mockParams.prefix);
+        const result = await JesApi.getJobsByParameters(mockParams);
 
         expect(result[0].jobname).toContain("JOB1");
-        expect(JobUtils.listJobs).toBeCalledTimes(1);
+        expect(JobUtils.listJobs).toHaveBeenCalledTimes(1);
         expect(JesApi.releaseConnection).toHaveBeenCalledTimes(0);
     });
 
     it("should get job by jobid.", async () => {
-        const jobStatus = { jobid: "123", jobname: "JOB1" };
+        const jobStatus = { jobId: "123", jobName: "JOB1" };
         JobUtils.findJobByID = jest.fn().mockReturnValue(jobStatus);
         const mockParams = {
             jobid: "123",
@@ -61,12 +62,12 @@ describe("FtpJesApi", () => {
         const result = await JesApi.getJob(mockParams.jobid);
 
         expect(result.jobname).toContain("JOB1");
-        expect(JobUtils.findJobByID).toBeCalledTimes(1);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect(JobUtils.findJobByID).toHaveBeenCalledTimes(1);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should get spoolfiles.", async () => {
-        const response = { jobid: "123", jobname: "JOB1", spoolFiles: [{ id: "1" }] };
+        const response = { jobId: "123", jobName: "JOB1", spoolFiles: [{ id: 1 }] };
         JobUtils.findJobByID = jest.fn().mockReturnValue(response);
         const mockParams = {
             jobname: "JOB1",
@@ -74,27 +75,37 @@ describe("FtpJesApi", () => {
         };
         const result = await JesApi.getSpoolFiles(mockParams.jobname, mockParams.jobid);
 
-        expect(result[0].id).toContain("1");
-        expect(JobUtils.findJobByID).toBeCalledTimes(1);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect(result[0].id).toEqual(1);
+        expect(JobUtils.findJobByID).toHaveBeenCalledTimes(1);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should download spool content.", async () => {
-        const jobDetails = { jobid: "123", jobname: "JOB1", spoolFiles: [{ id: "1" }, { id: "2" }] };
+        const jobDetails = { jobId: "123", jobName: "JOB1", spoolFiles: [{ id: 1 }, { id: 2 }] };
         JobUtils.findJobByID = jest.fn().mockReturnValue(jobDetails);
         JobUtils.getSpoolFiles = jest.fn().mockReturnValue(jobDetails.spoolFiles);
-        DownloadJobs.getSpoolDownloadFile = jest.fn().mockReturnValue("/tmp/file1");
+        imperative.IO.createDirsSyncFromFilePath = jest.fn();
         imperative.IO.writeFile = jest.fn();
         const mockParams = {
             parms: { jobname: "JOB1", jobid: "123", outDir: "/a/b/c" },
         };
 
         await JesApi.downloadSpoolContent(mockParams.parms);
-        expect(JobUtils.findJobByID).toBeCalledTimes(1);
-        expect(JobUtils.getSpoolFiles).toBeCalledTimes(1);
-        expect(DownloadJobs.getSpoolDownloadFile).toBeCalledTimes(2);
-        expect(imperative.IO.writeFile).toBeCalledTimes(2);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect(JobUtils.findJobByID).toHaveBeenCalledTimes(1);
+        expect(JobUtils.getSpoolFiles).toHaveBeenCalledTimes(1);
+        expect(imperative.IO.createDirsSyncFromFilePath).toHaveBeenCalledTimes(2);
+        expect(imperative.IO.writeFile).toHaveBeenCalledTimes(2);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
+    });
+
+    it("should throw an error when downloading spool content if no spool files are available.", async () => {
+        const jobDetails = { jobId: "123", jobName: "JOB1" };
+        const mockParams = {
+            parms: { jobname: "JOB1", jobid: "123", outDir: "/a/b/c" },
+        };
+        JobUtils.findJobByID = jest.fn().mockReturnValue(jobDetails);
+
+        await expect(JesApi.downloadSpoolContent(mockParams.parms)).rejects.toThrow();
     });
 
     it("should get spool content by id.", async () => {
@@ -107,9 +118,9 @@ describe("FtpJesApi", () => {
         };
         await JesApi.getSpoolContentById(mockParams.jobname, mockParams.jobid, mockParams.spoolID);
 
-        expect(response._readableState.buffer.head.data.toString()).toContain("Hello world");
-        expect(JobUtils.getSpoolFileContent).toBeCalledTimes(1);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect((response._readableState.buffer.head?.data ?? response._readableState.buffer).toString()).toContain("Hello world");
+        expect(JobUtils.getSpoolFileContent).toHaveBeenCalledTimes(1);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should submit job.", async () => {
@@ -122,9 +133,9 @@ describe("FtpJesApi", () => {
         };
         const result = await JesApi.submitJob(mockParams.jobDataSet);
         expect(result.jobid).toContain("123");
-        expect(JobUtils.submitJob).toBeCalledTimes(1);
-        expect(DataSetUtils.downloadDataSet).toBeCalledTimes(1);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect(JobUtils.submitJob).toHaveBeenCalledTimes(1);
+        expect(DataSetUtils.downloadDataSet).toHaveBeenCalledTimes(1);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should delete job.", async () => {
@@ -134,24 +145,24 @@ describe("FtpJesApi", () => {
             jobid: "123",
         };
         await JesApi.deleteJob(mockParams.jobname, mockParams.jobid);
-        expect(JobUtils.deleteJob).toBeCalledTimes(1);
-        expect(JesApi.releaseConnection).toBeCalled();
+        expect(JobUtils.deleteJob).toHaveBeenCalledTimes(1);
+        expect(JesApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should throw error when list jobs by owner and prefix failed.", async () => {
         jest.spyOn(JobUtils, "listJobs").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("List jobs failed.");
             })
         );
         await expect(async () => {
-            await JesApi.getJobsByOwnerAndPrefix("*", "*");
+            await JesApi.getJobsByParameters({});
         }).rejects.toThrow(ZoweFtpExtensionError);
     });
 
     it("should throw error when get job failed.", async () => {
         jest.spyOn(JobUtils, "findJobByID").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Get jobs failed.");
             })
         );
@@ -162,7 +173,7 @@ describe("FtpJesApi", () => {
 
     it("should throw error when get spool files failed.", async () => {
         jest.spyOn(JobUtils, "findJobByID").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Get jobs failed.");
             })
         );
@@ -173,7 +184,7 @@ describe("FtpJesApi", () => {
 
     it("should throw error when download spool contents failed.", async () => {
         jest.spyOn(JobUtils, "findJobByID").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Get jobs failed.");
             })
         );
@@ -187,7 +198,7 @@ describe("FtpJesApi", () => {
 
     it("should throw error when get spool contents by id failed.", async () => {
         jest.spyOn(JobUtils, "getSpoolFileContent").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Get spool file content failed.");
             })
         );
@@ -198,7 +209,7 @@ describe("FtpJesApi", () => {
 
     it("should throw error when submit job failed", async () => {
         jest.spyOn(JobUtils, "submitJob").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Submit job failed.");
             })
         );
@@ -209,7 +220,7 @@ describe("FtpJesApi", () => {
 
     it("should throw error when delete job failed", async () => {
         jest.spyOn(JobUtils, "deleteJob").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Delete job failed.");
             })
         );

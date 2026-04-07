@@ -25,7 +25,7 @@
       "options": {
         "cwd": "${workspaceFolder}/packages/zowe-explorer"
       },
-      "command": "yarn",
+      "command": "pnpm",
       "args": ["watch"],
       "problemMatcher": [
         {
@@ -52,7 +52,7 @@
               "regexp": "Compilation (.*?)starting…"
             },
             "endsPattern": {
-              "regexp": "Compilation (.*?)finished"
+              "regexp": "(.*?)compiled (successfully|with)(.*?)"
             }
           }
         }
@@ -66,7 +66,7 @@
       "options": {
         "cwd": "${workspaceFolder}/packages/zowe-explorer-ftp-extension"
       },
-      "command": "yarn",
+      "command": "pnpm",
       "args": ["watch"],
       "problemMatcher": [
         {
@@ -85,29 +85,22 @@
             {
               "regexp": "\\s*TS\\d+:\\s*(.*)",
               "message": 1
+            },
+            {
+              "regexp": "webpack(.*)compiled(.*)with(.*)error"
             }
           ],
           "background": {
             "activeOnStart": true,
             "beginsPattern": {
-              "regexp": "Compilation (.*?)starting…"
+              "regexp": "webpack --mode development"
             },
             "endsPattern": {
-              "regexp": "Compilation (.*?)finished"
+              "regexp": "webpack(.*)compiled(.*)with"
             }
           }
         }
       ]
-    },
-    {
-      "label": "Pretest",
-      "group": "build",
-      "isBackground": false,
-      "type": "shell",
-      "options": {
-        "cwd": "${workspaceFolder}/scripts"
-      },
-      "command": "ts-node create-env.ts"
     },
     {
       "label": "Build",
@@ -117,19 +110,7 @@
       "options": {
         "cwd": "${workspaceFolder}/packages/zowe-explorer"
       },
-      "command": "yarn",
-      "args": ["build:integration"],
-      "dependsOn": "Pretest"
-    },
-    {
-      "label": "Posttest",
-      "group": "build",
-      "isBackground": false,
-      "type": "shell",
-      "options": {
-        "cwd": "${workspaceFolder}/scripts"
-      },
-      "command": "ts-node clean-env.ts"
+      "command": "pnpm"
     }
   ]
 }

@@ -9,25 +9,35 @@
  *
  */
 
+/* eslint-disable max-len */
+
 /**
- * HTML template that is compiled with Handlebars to load a WebView instance at runtime.
+ * HTML template that is compiled with Mustache to load a WebView instance at runtime.
  */
-const HTMLTemplate: string = `
+const HTMLTemplate: string = /*html*/ `
 <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="UTF-8">
         <title>{{ title }}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta 
-            http-equiv="Content-Security-Policy" 
-            content="default-src 'none'; img-src vscode-resource: https:; script-src 'nonce-{{ nonce }}';
-            style-src vscode-resource: 'unsafe-inline' http: https: data:;"
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'none'; font-src data: https: {{ cspSource }}; img-src data: vscode-resource: https:; script-src {{#unsafeEval}}'unsafe-eval'{{/unsafeEval}} 'nonce-{{ nonce }}';
+            style-src {{ cspSource }} vscode-resource: 'unsafe-inline' http: https: data:;"
         />
         <base href="{{ uris.resource.build }}">
+        {{#uris.resource.css}}
+        <link type="text/css" rel="stylesheet" href="{{ uris.resource.css }}" />
+        {{/uris.resource.css}}
+        {{#uris.resource.codicons}}
+        <link type="text/css" rel="stylesheet" href="{{ uris.resource.codicons }}" />
+        {{/uris.resource.codicons}}
+        {{{ style }}}
     </head>
     <body>
         <noscript>You'll need to enable JavaScript to run this app.</noscript>
+        {{{ startup }}}
         <div id="webviewRoot"></div>
         <script type="module" nonce="{{ nonce }}" src="{{ uris.resource.script }}" />
     </body>

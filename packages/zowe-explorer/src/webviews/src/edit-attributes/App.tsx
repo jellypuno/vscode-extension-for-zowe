@@ -10,7 +10,9 @@ import {
   VSCodeProgressRing,
   VSCodeTextField,
 } from "@vscode/webview-ui-toolkit/react";
-import isEqual from "lodash.isequal";
+import { isEqual } from "es-toolkit";
+import * as l10n from "@vscode/l10n";
+import { isSecureOrigin } from "../utils";
 
 const vscodeApi = acquireVsCodeApi();
 
@@ -24,6 +26,18 @@ export function App() {
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [timestamp, setTimestamp] = useState<Date | null>();
+
+  const localizedPermissionTypes = [
+    { key: "read", localized: l10n.t("Read") },
+    { key: "write", localized: l10n.t("Write") },
+    { key: "execute", localized: l10n.t("Execute") },
+  ];
+
+  const localizedPermissionGroups = [
+    { key: "user", localized: l10n.t("User") },
+    { key: "group", localized: l10n.t("Group") },
+    { key: "all", localized: l10n.t("All") },
+  ];
 
   const updateButtons = (newAttributes: FileAttributes) => setAllowUpdate(!isEqual(attributes.initial, newAttributes));
 
@@ -62,18 +76,18 @@ export function App() {
   useEffect(() => {
     window.addEventListener("message", (event) => {
       // Prevent users from sending data into webview outside of extension/webview context
-      const eventUrl = new URL(event.origin);
-      const isWebUser =
-        (eventUrl.protocol === document.location.protocol && eventUrl.hostname === document.location.hostname) ||
-        eventUrl.hostname.endsWith(".github.dev");
-      const isLocalVSCodeUser = eventUrl.protocol === "vscode-webview:";
-
-      if (!isWebUser && !isLocalVSCodeUser) {
+      if (!isSecureOrigin(event.origin)) {
+        return;
+      }
+      if (!event.data) {
         return;
       }
 
-      if (!event.data) {
-        return;
+      if (event.data.command === "GET_LOCALIZATION") {
+        const { contents } = event.data;
+        l10n.config({
+          contents: contents,
+        });
       }
 
       if ("readonly" in event.data && event.data.readonly) {
@@ -130,6 +144,7 @@ export function App() {
     });
     // signal to extension that webview is ready for data; prevents race condition during initialization
     vscodeApi.postMessage({ command: "ready" });
+    vscodeApi.postMessage({ command: "GET_LOCALIZATION" });
   }, []);
 
   const updatePerm = (group: keyof FilePermissions, perm: keyof PermissionSet, value: boolean) => {
@@ -151,16 +166,27 @@ export function App() {
   return attributes.current ? (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>File properties</h1>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {timestamp && <p style={{ fontStyle: "italic", marginRight: "1em" }}>Last refreshed: {timestamp.toLocaleString(navigator.language)}</p>}
-          <VSCodeButton appearance="secondary" onClick={() => vscodeApi.postMessage({ command: "refresh" })}>
-            <span style={{ marginRight: "0.5em" }}>⟳</span>Refresh
+        <h1>{l10n.t("File Properties")}</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} aria-label={l10n.t("Header actions")}>
+          {timestamp && (
+            <p style={{ fontStyle: "italic", marginRight: "1em" }}>
+              {l10n.t("Last refreshed:")} {timestamp.toLocaleString(navigator.language)}
+            </p>
+          )}
+          <VSCodeButton
+            appearance="secondary"
+            aria-label={l10n.t("Refresh File Properties")}
+            onClick={() => vscodeApi.postMessage({ command: "refresh" })}
+          >
+            <span style={{ marginRight: "0.5em" }}>⟳</span>
+            {l10n.t("Refresh")}
           </VSCodeButton>
         </div>
       </div>
       <strong>
-        <pre style={{ fontSize: "1.25em" }}>{attributes.current.name}</pre>
+        <pre style={{ fontSize: "1.25em" }} aria-label={l10n.t("File path")}>
+          {attributes.current.name}
+        </pre>
       </strong>
       <VSCodeDivider />
       {attributes.initial?.directory ?? false ? null : (
@@ -170,71 +196,98 @@ export function App() {
             value={attributes.current.tag}
             onInput={(e: any) => updateFileAttributes("tag", e.target.value)}
           >
-            Tag
+            {l10n.t("Tag")}
           </VSCodeTextField>
         </div>
       )}
       <div style={{ marginTop: "1em" }}>
         <div style={{ maxWidth: "fit-content" }}>
-          <div style={{ display: "flex", marginLeft: "1em" }}>
+          <div
+            style={{ display: "flex", marginLeft: "1em" }}
+            role="group"
+            aria-label={l10n.t("Owner and group information with text fields to edit them")}
+          >
             <VSCodeTextField value={attributes.current.owner} onInput={(e: any) => updateFileAttributes("owner", e.target.value)}>
-              Owner
+              {l10n.t("Owner")}
             </VSCodeTextField>
             <VSCodeTextField
               style={{ marginLeft: "1em" }}
               onInput={(e: any) => updateFileAttributes("group", e.target.value)}
               value={attributes.current.group}
             >
-              Group
+              {l10n.t("Group")}
             </VSCodeTextField>
           </div>
           {attributes.current.perms ? (
-            <VSCodeDataGrid style={{ marginTop: "1em" }}>
+            <VSCodeDataGrid
+              style={{ marginTop: "1em" }}
+              aria-label={l10n.t("File permissions with checkboxes to toggle them")}
+              aria-describedby="permissions-description"
+            >
               <VSCodeDataGridRow>
                 <VSCodeDataGridCell cellType="columnheader" gridColumn="1"></VSCodeDataGridCell>
-                {PERMISSION_TYPES.map((perm, i) => {
-                  const capitalizedPerm = perm.charAt(0).toUpperCase() + perm.slice(1);
+                {localizedPermissionTypes.map(({ key, localized }, i) => {
                   return (
-                    <VSCodeDataGridCell cellType="columnheader" gridColumn={(i + 2).toString()} key={`${perm}-header`}>
-                      {capitalizedPerm}
+                    <VSCodeDataGridCell cellType="columnheader" gridColumn={(i + 2).toString()} key={`${key}-header`} id={`perm-header-${key}`}>
+                      {localized}
                     </VSCodeDataGridCell>
                   );
                 })}
               </VSCodeDataGridRow>
-              {PERMISSION_GROUPS.map((group) => {
-                const capitalizedGroup = group.charAt(0).toUpperCase() + group.slice(1);
+              {localizedPermissionGroups.map(({ key, localized }) => {
                 return (
-                  <VSCodeDataGridRow key={`${group}-row`}>
-                    <VSCodeDataGridCell cellType="rowheader" gridColumn="1">
-                      {capitalizedGroup}
+                  <VSCodeDataGridRow key={`${key}-row`} role="row">
+                    <VSCodeDataGridCell cellType="rowheader" gridColumn="1" id={`group-header-${key}`}>
+                      {localized}
                     </VSCodeDataGridCell>
-                    {PERMISSION_TYPES.map((perm, i) => (
-                      <VSCodeDataGridCell gridColumn={(i + 2).toString()} key={`${group}-${perm}-checkbox`}>
-                        <VSCodeCheckbox
-                          checked={attributes.current!.perms[group][perm]}
-                          onChange={(e: any) => updatePerm(group, perm, e.target.checked)}
-                        />
-                      </VSCodeDataGridCell>
-                    ))}
+                    {PERMISSION_TYPES.map((perm, i) => {
+                      const permLabel = localizedPermissionTypes.find((p) => p.key === perm)?.localized || perm;
+                      const isChecked = attributes.current!.perms[key as keyof FilePermissions][perm];
+                      const checkboxId = `checkbox-${key}-${perm}`;
+                      const labelId = `label-${key}-${perm}`;
+                      return (
+                        <VSCodeDataGridCell gridColumn={(i + 2).toString()} key={`${key}-${perm}-checkbox`}>
+                          <label id={labelId} htmlFor={checkboxId} style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                            <VSCodeCheckbox
+                              id={checkboxId}
+                              checked={isChecked}
+                              onChange={(e: any) => updatePerm(key as keyof FilePermissions, perm, e.target.checked)}
+                              aria-labelledby={`group-header-${key} perm-header-${perm} ${labelId}`}
+                            />
+                            <span style={{ position: "absolute", left: "-10000px", width: "1px", height: "1px", overflow: "hidden" }}>
+                              {l10n.t("{0} {1}", localized, permLabel)}
+                            </span>
+                          </label>
+                        </VSCodeDataGridCell>
+                      );
+                    })}
                   </VSCodeDataGridRow>
                 );
               })}
+              <span id="permissions-description" style={{ position: "absolute", left: "-10000px", width: "1px", height: "1px", overflow: "hidden" }}>
+                {l10n.t("Use checkboxes to toggle read, write, and execute permissions for user, group, and all users")}
+              </span>
             </VSCodeDataGrid>
           ) : null}
           <div style={{ display: "flex", alignItems: "center", marginLeft: "1em", marginTop: "1em", marginBottom: "1em" }}>
             <VSCodeButton
               disabled={!allowUpdate || readonly}
+              aria-label={
+                !allowUpdate || readonly
+                  ? l10n.t("Apply changes button - disabled. Make changes to file properties to activate this button")
+                  : l10n.t("Apply changes button - click to save your modifications")
+              }
               onClick={() => {
                 applyAttributes();
               }}
             >
-              Apply changes
+              {l10n.t("Apply changes")}
             </VSCodeButton>
-            {isUpdating && <VSCodeProgressRing style={{ marginLeft: "1em" }} />}
+            {isUpdating && <VSCodeProgressRing style={{ marginLeft: "1em" }} aria-label={l10n.t("Updating file properties")} />}
           </div>
           {readonly && (
             <span style={{ marginLeft: "1em", color: "var(--vscode-editorLightBulb-foreground)" }}>
-              The API does not support updating attributes for this {attributes.initial?.directory ?? false ? "directory" : "file"}.
+              {l10n.t("The API does not support updating attributes for this")} {attributes.initial?.directory ?? false ? "directory" : "file"}.
             </span>
           )}
         </div>
@@ -243,11 +296,11 @@ export function App() {
   ) : (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>File properties</h1>
+        <h1>{l10n.t("File Properties")}</h1>
         <VSCodeProgressRing style={{ marginLeft: "1em" }} />
       </div>
       <VSCodeDivider />
-      <p style={{ fontStyle: "italic" }}>Waiting for data from extension...</p>
+      <p style={{ fontStyle: "italic" }}>{l10n.t("Waiting for data from extension...")}</p>
     </div>
   );
 }

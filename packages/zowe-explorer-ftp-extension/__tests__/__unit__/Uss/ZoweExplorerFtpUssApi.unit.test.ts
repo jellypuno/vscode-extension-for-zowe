@@ -16,10 +16,14 @@
 import { FtpUssApi } from "../../../src/ZoweExplorerFtpUssApi";
 import { UssUtils } from "@zowe/zos-ftp-for-zowe-cli";
 import TestUtils from "../utils/TestUtils";
-import * as zowe from "@zowe/cli";
-import { ZoweLogger, sessionMap } from "../../../src/extension";
+import * as zosfiles from "@zowe/zos-files-for-zowe-sdk";
+import * as globals from "../../../src/globals";
 import { ZoweFtpExtensionError } from "../../../src/ZoweFtpExtensionError";
-import * as tmp from "tmp";
+import * as path from "path";
+import * as os from "os";
+import * as crypto from "crypto";
+import { imperative } from "@zowe/zowe-explorer-api";
+import { mocked } from "../../../__mocks__/mockUtils";
 
 // two methods to mock modules: create a __mocks__ file for zowe-explorer-api.ts and direct mock for extension.ts
 jest.mock("../../../__mocks__/@zowe/zowe-explorer-api.ts");
@@ -31,15 +35,23 @@ const readableStream = stream.Readable.from([]);
 const fs = require("fs");
 
 fs.createReadStream = jest.fn().mockReturnValue(readableStream);
-const UssApi = new FtpUssApi();
+
+// Helper function to create temporary file names using Node.js built-ins
+function createTempFileName(): string {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zowe-test-uss-"));
+    return path.join(tmpDir, `temp-${crypto.randomUUID()}.dat`);
+}
 
 describe("FtpUssApi", () => {
+    let UssApi: FtpUssApi;
     beforeEach(() => {
+        const profile: imperative.IProfileLoaded = { message: "", type: "zftp", failNotFound: false, profile: { host: "example.com", port: 22 } };
+        UssApi = new FtpUssApi(profile);
         UssApi.checkedProfile = jest.fn().mockReturnValue({ message: "success", type: "zftp", failNotFound: false });
         UssApi.ftpClient = jest.fn().mockReturnValue({ host: "", user: "", password: "", port: "" });
         UssApi.releaseConnection = jest.fn();
-        sessionMap.get = jest.fn().mockReturnValue({ ussListConnection: { connected: true } });
-        ZoweLogger.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
+        globals.SESSION_MAP.get = jest.fn().mockReturnValue({ ussListConnection: { isConnected: () => true } });
+        globals.LOGGER.getExtensionName = jest.fn().mockReturnValue("Zowe Explorer FTP Extension");
     });
 
     afterEach(() => {
@@ -57,13 +69,13 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.fileList(mockParams.ussFilePath);
 
-        expect(result.apiResponse.items[0].name).toContain("file1");
-        expect(UssUtils.listFiles).toBeCalledTimes(1);
+        expect(result.apiResponse.items.map((item) => item.name)).toEqual([".", "..", "file1", "dir1"]);
+        expect(UssUtils.listFiles).toHaveBeenCalledTimes(1);
         expect(UssApi.releaseConnection).toHaveBeenCalledTimes(0);
     });
 
     it("should view uss files.", async () => {
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
         const response = TestUtils.getSingleLineStream();
         UssUtils.downloadFile = jest.fn().mockReturnValue(response);
 
@@ -75,28 +87,29 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.getContents(mockParams.ussFilePath, mockParams.options);
 
-        expect(result.apiResponse.etag).toHaveLength(40);
-        expect(UssUtils.downloadFile).toBeCalledTimes(1);
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(result.apiResponse.etag).toHaveLength(64);
+        expect(UssUtils.downloadFile).toHaveBeenCalledTimes(1);
+        expect(mocked(UssUtils.downloadFile).mock.calls[0][2].localFile).toBe(localFile);
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
 
-        expect(response._readableState.buffer.head.data.toString()).toContain("Hello world");
+        expect((response._readableState.buffer.head?.data ?? response._readableState.buffer).toString()).toContain("Hello world");
     });
 
-    const mockUssFileParams = {
-        inputFilePath: "/tmp/testfile1.txt",
-        ussFilePath: "/a/b/c.txt",
-        etag: "123",
-        returnEtag: true,
-        options: {
-            file: "/tmp/testfile1.txt",
-        },
-    };
+    it("should throw error for getContents if connection to FTP client fails.", async () => {
+        jest.spyOn(UssApi, "ftpClient").mockReturnValueOnce(null);
+        await expect(UssApi.getContents("/some/example/path", {})).rejects.toThrow();
+    });
+
+    it("should throw error for putContent if connection to FTP client fails.", async () => {
+        jest.spyOn(UssApi, "ftpClient").mockReturnValueOnce(null);
+        await expect(UssApi.putContent("/some/example/input/path", "/some/uss/path")).rejects.toThrow();
+    });
 
     it("should upload uss files.", async () => {
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
         const response = TestUtils.getSingleLineStream();
         UssUtils.uploadFile = jest.fn().mockReturnValue(response);
-        const tmpNameSyncSpy = jest.spyOn(tmp, "tmpNameSync");
+        const mkdtempSyncSpy = jest.spyOn(fs, "mkdtempSync");
         const rmSyncSpy = jest.spyOn(fs, "rmSync");
         jest.spyOn(UssApi, "getContents").mockResolvedValue({ apiResponse: { etag: "test" } } as any);
         const mockParams = {
@@ -108,39 +121,69 @@ describe("FtpUssApi", () => {
                 file: localFile,
             },
         };
-        const result = await UssApi.putContents(mockParams.inputFilePath, mockParams.ussFilePath, undefined, undefined, "test", true);
-        jest.spyOn(UssApi as any, "getContents").mockResolvedValueOnce({ apiResponse: { etag: "test" } });
+        const result = await UssApi.putContent(mockParams.inputFilePath, mockParams.ussFilePath, {
+            etag: "test",
+            returnEtag: true,
+        });
+        jest.spyOn(UssApi as any, "getContentsTag").mockReturnValue("test");
         expect(result.commandResponse).toContain("File uploaded successfully.");
-        expect(UssUtils.downloadFile).toBeCalledTimes(1);
-        expect(UssUtils.uploadFile).toBeCalledTimes(1);
-        expect(UssApi.releaseConnection).toBeCalled();
-        // check that correct function is called from node-tmp
-        expect(tmpNameSyncSpy).toHaveBeenCalled();
+        expect(UssUtils.downloadFile).toHaveBeenCalledTimes(1);
+        expect(UssUtils.uploadFile).toHaveBeenCalledTimes(1);
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
+        // check that correct Node.js built-in functions are called
+        expect(mkdtempSyncSpy).toHaveBeenCalled();
         expect(rmSyncSpy).toHaveBeenCalled();
-    });
-
-    it("should call putContents when calling putContent", async () => {
-        const putContentsMock = jest.spyOn(UssApi, "putContents").mockImplementation();
-        await UssApi.putContent(mockUssFileParams.inputFilePath, mockUssFileParams.ussFilePath);
-        expect(putContentsMock).toHaveBeenCalled();
     });
 
     it("should upload uss directory.", async () => {
         const localpath = "/tmp";
-        const files = ["file1", "file2"];
-        zowe.ZosFilesUtils.getFileListFromPath = jest.fn().mockReturnValue(files);
+        const files = ["/tmp/file1", "/tmp/file2"];
+        const isDirMock = jest.spyOn(imperative.IO, "isDir").mockReturnValue(true);
+        const getFileListFromPathMock = jest.spyOn(zosfiles.ZosFilesUtils, "getFileListFromPath").mockReturnValue(files);
         const mockParams = {
             inputDirectoryPath: localpath,
             ussDirectoryPath: "/a/b/c",
             options: {},
         };
         const response = {};
-        jest.spyOn(UssApi, "putContents").mockResolvedValue(response as any);
+        const putContentMock = jest
+            .spyOn(UssApi, "putContent")
+            .mockReset()
+            .mockResolvedValue(response as any);
         await UssApi.uploadDirectory(mockParams.inputDirectoryPath, mockParams.ussDirectoryPath, mockParams.options);
-
-        // One call to make the folder, one call per file
-        expect(UssApi.putContents).toBeCalledTimes(3);
+        // putContent is called for each file in the directory
+        expect(putContentMock).toHaveBeenCalledWith("/tmp/file1", "/a/b/c/file1");
+        expect(putContentMock).toHaveBeenCalledWith("/tmp/file2", "/a/b/c/file2");
+        expect(getFileListFromPathMock).toHaveBeenCalledTimes(1);
+        expect(isDirMock).toHaveBeenCalledTimes(1);
+        expect(isDirMock).toHaveBeenCalledWith(localpath);
+        isDirMock.mockRestore();
     });
+
+    if (os.platform() === "win32") {
+        it("should upload uss directory on Windows with proper input file paths.", async () => {
+            const localpath = "C:\\Windows\\Temp";
+            const files = ["C:\\Windows\\Temp\\file1", "C:\\Windows\\Temp\\file2"];
+            // Mock out the isDir result in case the drive letter is not present on the system where the test is running
+            jest.spyOn(imperative.IO, "isDir").mockReturnValueOnce(true);
+            const getFileListFromPathMock = jest.spyOn(zosfiles.ZosFilesUtils, "getFileListFromPath").mockReturnValue(files);
+            const mockParams = {
+                inputDirectoryPath: localpath,
+                ussDirectoryPath: "/a/b/c",
+                options: {},
+            };
+            const response = {};
+            const putContentMock = jest
+                .spyOn(UssApi, "putContent")
+                .mockReset()
+                .mockResolvedValue(response as any);
+            await UssApi.uploadDirectory(mockParams.inputDirectoryPath, mockParams.ussDirectoryPath, mockParams.options);
+            // putContent is called for each file in the directory
+            expect(putContentMock).toHaveBeenCalledWith("C:\\Windows\\Temp\\file1", "/a/b/c/file1");
+            expect(putContentMock).toHaveBeenCalledWith("C:\\Windows\\Temp\\file2", "/a/b/c/file2");
+            expect(getFileListFromPathMock).toHaveBeenCalledTimes(1);
+        });
+    }
 
     it("should create uss directory.", async () => {
         UssUtils.makeDirectory = jest.fn();
@@ -151,9 +194,9 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.create(mockParams.ussPath, mockParams.type);
         expect(result.commandResponse).toContain("Directory or file created.");
-        expect(UssUtils.makeDirectory).toBeCalledTimes(1);
-        expect(UssUtils.uploadFile).not.toBeCalled();
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(UssUtils.makeDirectory).toHaveBeenCalledTimes(1);
+        expect(UssUtils.uploadFile).not.toHaveBeenCalled();
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should create uss file.", async () => {
@@ -165,9 +208,9 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.create(mockParams.ussPath, mockParams.type);
         expect(result.commandResponse).toContain("Directory or file created.");
-        expect(UssUtils.uploadFile).toBeCalledTimes(1);
-        expect(UssUtils.makeDirectory).not.toBeCalled();
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(UssUtils.uploadFile).toHaveBeenCalledTimes(1);
+        expect(UssUtils.makeDirectory).not.toHaveBeenCalled();
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should delete uss directory with recursive.", async () => {
@@ -179,9 +222,9 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.delete(mockParams.ussPath, mockParams.recursive);
         expect(result.commandResponse).toContain("Delete completed.");
-        expect(UssUtils.deleteDirectory).toBeCalledTimes(1);
-        expect(UssUtils.deleteFile).not.toBeCalled();
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(UssUtils.deleteDirectory).toHaveBeenCalledTimes(1);
+        expect(UssUtils.deleteFile).not.toHaveBeenCalled();
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should delete uss file.", async () => {
@@ -193,9 +236,9 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.delete(mockParams.ussPath, mockParams.recursive);
         expect(result.commandResponse).toContain("Delete completed.");
-        expect(UssUtils.deleteFile).toBeCalledTimes(1);
-        expect(UssUtils.deleteDirectory).not.toBeCalled();
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(UssUtils.deleteFile).toHaveBeenCalledTimes(1);
+        expect(UssUtils.deleteDirectory).not.toHaveBeenCalled();
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should rename uss file or directory.", async () => {
@@ -206,8 +249,8 @@ describe("FtpUssApi", () => {
         };
         const result = await UssApi.rename(mockParams.currentUssPath, mockParams.newUssPath);
         expect(result.commandResponse).toContain("Rename completed.");
-        expect(UssUtils.renameFile).toBeCalledTimes(1);
-        expect(UssApi.releaseConnection).toBeCalled();
+        expect(UssUtils.renameFile).toHaveBeenCalledTimes(1);
+        expect(UssApi.releaseConnection).toHaveBeenCalled();
     });
 
     it("should receive false from isFileTagBinOrAscii as it is not implemented in the FTP extension.", async () => {
@@ -216,7 +259,7 @@ describe("FtpUssApi", () => {
 
     it("should throw error when list files failed", async () => {
         jest.spyOn(UssUtils, "listFiles").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("List files failed.");
             })
         );
@@ -229,7 +272,7 @@ describe("FtpUssApi", () => {
         jest.spyOn(UssUtils, "downloadFile").mockImplementationOnce(() => {
             throw new Error("Download file failed.");
         });
-        const localFile = tmp.tmpNameSync({ tmpdir: "/tmp" });
+        const localFile = createTempFileName();
         const mockParams = {
             ussFilePath: "/a/b/d.txt",
             options: {
@@ -261,7 +304,7 @@ describe("FtpUssApi", () => {
 
     it("should throw error when upload directory failed", async () => {
         jest.spyOn(UssUtils, "uploadFile").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Upload file failed.");
             })
         );
@@ -277,7 +320,7 @@ describe("FtpUssApi", () => {
 
     it("should throw error when create file failed", async () => {
         jest.spyOn(UssUtils, "uploadFile").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Upload file failed.");
             })
         );
@@ -288,7 +331,7 @@ describe("FtpUssApi", () => {
 
     it("should throw error when delete file failed", async () => {
         jest.spyOn(UssUtils, "deleteFile").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Delete file failed.");
             })
         );
@@ -299,12 +342,32 @@ describe("FtpUssApi", () => {
 
     it("should throw error when rename file failed", async () => {
         jest.spyOn(UssUtils, "renameFile").mockImplementationOnce(
-            jest.fn((val) => {
+            jest.fn((_val) => {
                 throw new Error("Rename file failed.");
             })
         );
         await expect(async () => {
             await UssApi.rename("/a/b/c", "a/b/d");
         }).rejects.toThrow(ZoweFtpExtensionError);
+    });
+
+    describe("uploadFromBuffer", () => {
+        function getBlockMocks(): Record<string, jest.SpyInstance> {
+            return {
+                processNewlinesSpy: jest.spyOn(imperative.IO, "processNewlines"),
+                putContent: jest.spyOn(UssApi, "putContent").mockImplementation(),
+                mkdtempSyncMock: jest.spyOn(fs, "mkdtempSync").mockReturnValueOnce("/tmp/zowe-test-uss-12345"),
+                writeSyncMock: jest.spyOn(fs, "writeSync").mockImplementation(),
+            };
+        }
+
+        it("should upload file from buffer", async () => {
+            const buf = Buffer.from("abc123");
+            const blockMocks = getBlockMocks();
+
+            const ussPath = "/some/fs/path";
+            await UssApi.uploadFromBuffer(buf, ussPath);
+            expect(blockMocks.putContent).toHaveBeenCalledWith(buf, ussPath, undefined);
+        });
     });
 });

@@ -13,7 +13,8 @@ import { VSCodeCheckbox, VSCodeDataGridCell, VSCodeDataGridRow } from "@vscode/w
 import { JSXInternal } from "preact/src/jsx";
 import { useDataPanelContext } from "../PersistentUtils";
 import { useEffect, useState } from "preact/hooks";
-import isEqual from "lodash.isequal";
+import { isEqual } from "es-toolkit";
+import * as l10n from "@vscode/l10n";
 
 export default function PersistentTableData({ persistentProp }: Readonly<{ persistentProp: readonly string[] }>): JSXInternal.Element {
   const { type, selection, selectedItems } = useDataPanelContext();
@@ -35,7 +36,8 @@ export default function PersistentTableData({ persistentProp }: Readonly<{ persi
   };
 
   const renderSelectButton = (item: string, i: number) => {
-    return selection[type] === "search" || selection[type] === "fileHistory" ? (
+    const selectionType = ["search", "fileHistory", "encodingHistory", "searchedKeywordHistory"];
+    return selectionType.includes(selection[type]) ? (
       <VSCodeDataGridCell grid-column="2" style={{ maxWidth: "20vw", textAlign: "center" }}>
         <VSCodeCheckbox key={`${i}${item}`} onClick={(event: any) => handleClick(event, i)}></VSCodeCheckbox>
       </VSCodeDataGridCell>
@@ -56,7 +58,7 @@ export default function PersistentTableData({ persistentProp }: Readonly<{ persi
   const renderNoRecordsFound = () => {
     return (
       <VSCodeDataGridRow>
-        <VSCodeDataGridCell grid-column="1">No records found</VSCodeDataGridCell>
+        <VSCodeDataGridCell grid-column="1">{l10n.t("No records found")}</VSCodeDataGridCell>
       </VSCodeDataGridRow>
     );
   };

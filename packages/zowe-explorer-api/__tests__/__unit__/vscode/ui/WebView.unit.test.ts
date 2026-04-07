@@ -11,7 +11,7 @@
 
 import { WebView } from "../../../../src/vscode/ui";
 import * as vscode from "vscode";
-import * as Handlebars from "handlebars";
+import * as Mustache from "mustache";
 
 describe("WebView unit tests", () => {
     beforeAll(() => {
@@ -26,15 +26,10 @@ describe("WebView unit tests", () => {
                 onDidDispose: jest.fn(),
             }),
         });
-        Object.defineProperty(vscode, "Uri", {
-            value: {
-                file: jest.fn(),
-            },
-        });
     });
     it("Successfully creates a WebView", () => {
         const createWebviewPanelSpy = jest.spyOn(vscode.window, "createWebviewPanel");
-        const compileSpy = jest.spyOn(Handlebars, "compile");
+        const renderSpy = jest.spyOn(Mustache as any, "render");
 
         try {
             new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext);
@@ -42,32 +37,74 @@ describe("WebView unit tests", () => {
             throw new Error("Failed to create WebView");
         }
         expect(createWebviewPanelSpy).toHaveBeenCalled();
-        expect(compileSpy).toHaveBeenCalled();
+        expect(renderSpy).toHaveBeenCalled();
     });
 
     it("Correctly disposes a WebView", () => {
         const createWebviewPanelSpy = jest.spyOn(vscode.window, "createWebviewPanel");
-        const compileSpy = jest.spyOn(Handlebars, "compile");
+        const renderSpy = jest.spyOn(Mustache as any, "render");
 
-        const testView = new WebView(
-            "Test Webview Title",
-            "example-folder",
-            { extensionPath: "test/path" } as vscode.ExtensionContext,
-            async (_message: any) => {}
-        );
+        const disposeMock = jest.fn();
+        const disposable = new vscode.Disposable(disposeMock);
+
+        const testView = new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            onDidReceiveMessage: async (_message: any) => {},
+        });
+        (testView as any).disposables = [disposable];
         expect(createWebviewPanelSpy).toHaveBeenCalled();
-        expect(compileSpy).toHaveBeenCalled();
+        expect(renderSpy).toHaveBeenCalled();
         (testView as any).dispose();
         expect(testView.panel).toBeUndefined();
+        expect(disposeMock).toHaveBeenCalledTimes(1);
     });
 
     it("returns HTML content from WebView", () => {
-        const testView = new WebView(
-            "Test Webview Title",
-            "example-folder",
-            { extensionPath: "test/path" } as vscode.ExtensionContext,
-            async (_message: any) => {}
-        );
+        const testView = new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            onDidReceiveMessage: async (_message: any) => {},
+        });
         expect(testView.htmlContent).toBe(testView.panel.webview.html);
+    });
+
+    it("sets viewColumn from WebViewOpts", () => {
+        const createWebviewPanelSpy = jest.spyOn(vscode.window, "createWebviewPanel");
+        const viewColumn = vscode.ViewColumn.One;
+        new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            viewColumn,
+        });
+        expect(createWebviewPanelSpy).toHaveBeenCalledWith(
+            "ZEAPIWebview",
+            "Test Webview Title",
+            viewColumn,
+            expect.objectContaining({
+                enableScripts: true,
+                retainContextWhenHidden: false,
+            })
+        );
+    });
+
+    it("sets iconPath from string in WebViewOpts", () => {
+        const iconPath = "test/path/to/icon.png";
+        const testView = new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            iconPath,
+        });
+        expect(testView.panel.iconPath).toEqual(vscode.Uri.file(iconPath));
+    });
+
+    it("sets iconPath from Uri in WebViewOpts", () => {
+        const iconUri = vscode.Uri.file("test/path/to/icon.png");
+        const testView = new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            iconPath: iconUri,
+        });
+        expect(testView.panel.iconPath).toBe(iconUri);
+    });
+
+    it("sets iconPath from light/dark object in WebViewOpts", () => {
+        const light = "test/path/to/light.png";
+        const dark = vscode.Uri.file("test/path/to/dark.png");
+        const testView = new WebView("Test Webview Title", "example-folder", { extensionPath: "test/path" } as vscode.ExtensionContext, {
+            iconPath: { light, dark },
+        });
+        expect((testView.panel.iconPath as any).light).toEqual(vscode.Uri.file(light));
+        expect((testView.panel.iconPath as any).dark).toBe(dark);
     });
 });

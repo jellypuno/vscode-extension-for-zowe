@@ -9,4 +9,5 @@
  *
  */
 
-export * from "./IPromptCredentials";
+export * from "./BaseProfileAuth";
+export * from "./PromptCredentials";

@@ -9,7 +9,8 @@
  *
  */
 
+export * from "./AuthHandler";
+export * from "./Validation";
 export * from "./UserSettings";
 export * from "./ProfilesCache";
-export * from "./ZoweExplorerApi";
 export * from "./ZoweExplorerZosmfApi";

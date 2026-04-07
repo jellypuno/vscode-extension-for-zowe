@@ -12,10 +12,10 @@
 import { Gui, IZoweTree, IZoweTreeNode } from "../../../src/";
 
 import * as vscode from "vscode";
-import { DOUBLE_CLICK_SPEED_MS } from "../../../src/globals";
+import { Constants } from "../../../src/globals";
 jest.mock("vscode");
 
-function createGlobalMocks() {
+function createGlobalMocks(): { [key: string]: jest.Mock } {
     const mocks = {
         showInfoMessage: jest.fn(),
         showErrorMessage: jest.fn(),
@@ -144,6 +144,12 @@ describe("Gui unit tests", () => {
         expect(mocks.showOpenDialog).toHaveBeenCalled();
     });
 
+    it("can show a file open dialog without invalid default URI", async () => {
+        Object.defineProperty(vscode.env, "remoteName", { value: null });
+        await Gui.showOpenDialog({ defaultUri: { scheme: "vscode-remote" } as vscode.Uri });
+        expect(mocks.showOpenDialog).toHaveBeenCalledWith({ defaultUri: undefined });
+    });
+
     it("can show an input box", async () => {
         await Gui.showInputBox({});
         expect(mocks.showInputBox).toHaveBeenCalled();
@@ -198,10 +204,10 @@ describe("Gui.utils - unit tests", () => {
     };
 
     it("returns false when the second click event is after the DOUBLE_CLICK_SPEED_MS window", () => {
-        testDoubleClickEvent(DOUBLE_CLICK_SPEED_MS * 4, false);
+        testDoubleClickEvent(Constants.DOUBLE_CLICK_SPEED_MS * 4, false);
     });
 
     it("returns true when the second click event is within the DOUBLE_CLICK_SPEED_MS window", () => {
-        testDoubleClickEvent(DOUBLE_CLICK_SPEED_MS / 8, true);
+        testDoubleClickEvent(Constants.DOUBLE_CLICK_SPEED_MS / 8, true);
     });
 });

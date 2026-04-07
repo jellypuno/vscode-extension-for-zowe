@@ -2,37 +2,64 @@ extends:
   - eslint:recommended
   - plugin:@typescript-eslint/recommended-requiring-type-checking
   - prettier
+  - plugin:deprecation/recommended
 env:
   node: true
   es6: true
-ignorePatterns: ["**/scripts", "**/__mocks__", "**/lib"]
+ignorePatterns:
+  [
+    "**/scripts",
+    "**/__mocks__",
+    "**/lib",
+    "webpack.config.js",
+    "**/*wdio.conf.ts",
+    "**/features/",
+    "samples/__integration__/",
+    "**/out",
+    "**/results",
+    "**/src/webviews",
+  ]
 overrides:
   - files: "**/__tests__/**"
     rules:
       no-magic-numbers: off
-      # There are several errors falling under these rules; resolve
       "@typescript-eslint/require-await": warn
       "@typescript-eslint/no-misused-promises": warn
-      "@typescript-eslint/no-unsafe-return": warn
+      "@typescript-eslint/no-unsafe-return": off
       "@typescript-eslint/restrict-plus-operands": warn
       "@typescript-eslint/restrict-template-expressions": warn
-      "@typescript-eslint/explicit-function-return-type": warn
-      "@typescript-eslint/unbound-method": warn
+      "@typescript-eslint/explicit-function-return-type": off
+      "@typescript-eslint/unbound-method": off
       zowe-explorer/no-floating-promises: warn
+      curly: off
 parser: "@typescript-eslint/parser"
 parserOptions:
   ecmaVersion: 6
   sourceType: module
   project:
-    - "./tsconfig.json"
-    - "./tsconfig-tests.json"
+    - "**/tsconfig.json"
+    - "**/tsconfig-tests.json"
 plugins:
   - "@typescript-eslint"
   - zowe-explorer
 rules:
   "@typescript-eslint/await-thenable": off
   "@typescript-eslint/consistent-type-assertions": warn
-  "@typescript-eslint/explicit-function-return-type": error
+  "@typescript-eslint/explicit-function-return-type": [
+      "error",
+      {
+        # We only disallow the rules that provide value (i.e. that found some errors while configuring)
+        # Documentation: https://typescript-eslint.io/rules/explicit-function-return-type
+        allowHigherOrderFunctions: false,
+        allowFunctionsWithoutTypeParameters: false,
+
+        # Disabling (i.e. setting to `false`) the following rule will force us to unnecessarily type built-in functions
+        # For example, to find the index of a profile in a profiles array we will have to go:
+        #     FROM: profiles.findIndex((profile) => profile.name === "my_profile"))
+        #     TO:   profiles.findIndex((profile): boolean => profile.name === "my_profile"))
+        allowTypedFunctionExpressions: true,
+      },
+    ]
   "@typescript-eslint/explicit-member-accessibility": error
 
   # There are several errors falling under these rules; resolve
@@ -46,9 +73,9 @@ rules:
   "@typescript-eslint/no-unused-expressions": error
   "@typescript-eslint/no-var-requires": warn
   array-callback-return: error
-  complexity:
-    - warn
-    - 15
+  # complexity:
+  #   - warn
+  #   - 15
   constructor-super: error
   curly: warn
   getter-return: error
@@ -69,9 +96,9 @@ rules:
   no-irregular-whitespace: warn
   no-magic-numbers:
     - warn
-    - "ignore": [-1, 0, 1, 2, 4]
+    - "ignore": [-2, -1, 0, 1, 2, 4]
   no-multiple-empty-lines: warn
-  no-return-await: warn
+  no-return-await: off
   no-sequences: warn
   no-shadow: off
   no-sparse-arrays: warn

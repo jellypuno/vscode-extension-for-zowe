@@ -4,41 +4,60 @@ on:
   push:
     branches:
       - main
-      - maintenance
       - v1-lts
+      - v2-lts
+      - release/3.*
     paths:
       - .github/release.config.js
       - .github/workflows/deployment.yml
       - lerna.json
-  # workflow_dispatch:
-  #   inputs:
-  #     version:
-  #       description: Override version to be published
-  #       required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Override version to be published
+        required: false
 
 jobs:
   release:
     if: github.event_name == 'workflow_dispatch' || github.ref_protected
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
 
     steps:
+      - name: Check permissions
+        if: ${{ github.event_name == 'workflow-dispatch' }}
+        uses: prince-chrismc/check-actor-permissions-action@v3
+        with:
+          permission: admin
+
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ github.ref }}
 
       - name: Use Node.js LTS
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '16.x'
+          node-version: '20.x'
 
-      - name: Install Yarn and Lerna
-        run: npm install -g yarn lerna@6
+      - name: Install pnpm and Lerna
+        run: npm install -g pnpm lerna@6
 
       - name: Build Source
-        run: yarn
+        run: |
+          pnpm install
+          pnpm build
+
+      - name: Download Translations
+        run: node scripts/downloadPoeditorL10n.js
+        working-directory: packages/zowe-explorer
+        env:
+          POEDITOR_TOKEN: ${{ secrets.POEDITOR_TOKEN }}
 
       - name: Get Project Version
         id: lerna
@@ -52,9 +71,9 @@ jobs:
           GIT_COMMITTER_EMAIL: ${{ secrets.ZOWE_ROBOT_EMAIL }}
           GIT_CREDENTIALS: x-access-token:${{ secrets.ZOWE_ROBOT_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_PUBLISHER_TOKEN }}
-          OVSX_PAT: ${{ secrets.VSCODE_ZOWE_ROBOT_PUBLISH_TOKEN }}
-          VSCE_PAT: ${{ secrets.VSCODE_PUBLISHER_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_PUBLIC_TOKEN }}
+          OVSX_PAT: ${{ secrets.VSCODE_OVSX_PUBLISHER_TOKEN }}
+          VSCE_PAT: ${{ secrets.VSCODE_VSCE_PUBLISHER_TOKEN }}
         with:
           config-dir: .github
           new-version: ${{ github.event.inputs.version }}
@@ -66,10 +85,10 @@ jobs:
           git add packages/*/CHANGELOG.md
 
       - name: Create Snapshot Version
-        if: steps.octorelease.outcome == 'success'
+        if: ${{ steps.octorelease.outcome == 'success' }}
         uses: zowe-actions/octorelease/script@v1
         env:
-          VERSION_STRING: "%s-SNAPSHOT"
+          VERSION_STRING: "${{ github.ref_name != 'next' && '%s-SNAPSHOT' || '%s-next-SNAPSHOT' }}"
         with:
           config-dir: .github
           script: prepareRelease

@@ -12,17 +12,15 @@
 import { VSCodeDataGridRow, VSCodeDataGridCell } from "@vscode/webview-ui-toolkit/react";
 import { JSXInternal } from "preact/src/jsx";
 import { useDataPanelContext } from "../PersistentUtils";
-import * as nls from "vscode-nls";
-
-const localize: nls.LocalizeFunc = nls.loadMessageBundle();
+import * as l10n from "@vscode/l10n";
 
 export default function PersistentDataGridHeaders(): JSXInternal.Element {
   const { type, selection } = useDataPanelContext();
-  const itemText = localize("PersistentDataGridHeaders.item", "Item");
+  const itemText = l10n.t("Item");
 
   const renderSelectHeader = () => {
-    const deleteText = localize("PersistentDataGridHeaders.select", "Select");
-    return selection[type] === "search" || selection[type] === "fileHistory" ? (
+    const deleteText = l10n.t("Select");
+    return selection[type] === "search" || selection[type] === "fileHistory" || selection[type] === "searchedKeywordHistory" ? (
       <VSCodeDataGridCell cell-type="columnheader" grid-column="2" style={{ maxWidth: "20vw", textAlign: "center" }}>
         {deleteText}
       </VSCodeDataGridCell>

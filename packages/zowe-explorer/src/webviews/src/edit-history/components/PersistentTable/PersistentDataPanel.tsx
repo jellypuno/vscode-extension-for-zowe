@@ -12,12 +12,13 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { VSCodePanelView, VSCodeDataGrid } from "@vscode/webview-ui-toolkit/react";
 import { JSXInternal } from "preact/src/jsx";
-import { DataPanelContext, isSecureOrigin } from "../PersistentUtils";
+import { DataPanelContext } from "../PersistentUtils";
+import { isSecureOrigin } from "../../../utils";
 import { panelId } from "../../types";
 import PersistentToolBar from "../PersistentToolBar/PersistentToolBar";
 import PersistentTableData from "./PersistentTableData";
 import PersistentDataGridHeaders from "./PersistentDataGridHeaders";
-import PersistentVSCodeAPI from "../PersistentVSCodeAPI";
+import PersistentVSCodeAPI from "../../../PersistentVSCodeAPI";
 
 export default function PersistentDataPanel({ type }: Readonly<{ type: Readonly<string> }>): JSXInternal.Element {
   const [data, setData] = useState<{ [type: string]: { [property: string]: string[] } }>({ ds: {}, uss: {}, jobs: {} });
@@ -42,7 +43,6 @@ export default function PersistentDataPanel({ type }: Readonly<{ type: Readonly<
         type,
       },
     });
-
     const newSelectedItems: { [key: string]: boolean } = { ...selectedItemsMemo.val };
     Object.keys(newSelectedItems).forEach((item) => {
       newSelectedItems[item] = false;
@@ -51,29 +51,43 @@ export default function PersistentDataPanel({ type }: Readonly<{ type: Readonly<
   };
 
   useEffect(() => {
-    window.addEventListener("message", (event) => {
+    const handleMessage = (event: MessageEvent) => {
       if (!isSecureOrigin(event.origin)) {
         return;
       }
+      if (event.data.ds && event.data.uss && event.data.jobs) {
+        setData(event.data);
 
-      setData(event.data);
-
-      if ("selection" in event.data) {
-        setSelection(() => ({
-          [type]: event.data.selection[type],
-        }));
+        if ("selection" in event.data) {
+          setSelection(() => ({
+            [type]: event.data.selection[type],
+          }));
+        }
       }
-    });
-  }, []);
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [type]);
 
   useEffect(() => {
-    setPersistentProp(() => data[type][selection[type]]);
-  }, [data]);
+    if (data[type] && selection[type]) {
+      setPersistentProp(() => data[type][selection[type]] || []);
+    }
+  }, [data, selection, type]);
 
-  useEffect(() => {
-    setPersistentProp(() => data[type][selection[type]]);
-  }, [selection]);
-
+  if (type == "cmds") {
+    return (
+      <DataPanelContext.Provider value={{ type, selection, selectedItems: selectedItemsMemo }}>
+        <VSCodePanelView id={panelId[type]} style={{ flexDirection: "column", minHeight: "100vh" }}>
+          <h1>Coming soon!</h1>
+        </VSCodePanelView>
+      </DataPanelContext.Provider>
+    );
+  }
   return (
     <DataPanelContext.Provider value={{ type, selection, selectedItems: selectedItemsMemo }}>
       <VSCodePanelView id={panelId[type]} style={{ flexDirection: "column", minHeight: "100vh" }}>

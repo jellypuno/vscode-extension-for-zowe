@@ -9,10 +9,10 @@
  *
  */
 
-import { ZoweLogger } from "./extension";
+import * as globals from "./globals";
 
 export class ZoweFtpExtensionError extends Error {
     public constructor(message: string) {
-        super(ZoweLogger.getExtensionName() + ": " + message);
+        super(globals.LOGGER.getExtensionName() + ": " + message);
     }
 }

@@ -6,8 +6,758 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 
 ### New features and enhancements
 
+- Enhanced "Show Attributes" feature with improved visual presentation: aligned all attribute table columns consistently across core and extender sections, added thousands separators for numeric values, and automatically appends the `%` symbol to "Used Space" values for better readability. [#3927](https://github.com/zowe/zowe-explorer-vscode/issues/3927)
+- Added a new `Poll For Job Completion` button to the job submitted notification which polls on the job status and notify when the job is complete. The poll interval can be changed in the setting `Zowe > Jobs: Poll Interval`. [#3967](https://github.com/zowe/zowe-explorer-vscode/pull/3967)
+- Add localization support to release notes and changelogs. [#4047](https://github.com/zowe/zowe-explorer-vscode/pull/4047)
+- Add support for filtering PDS members by name and by date created. [#4075](https://github.com/zowe/zowe-explorer-vscode/pull/4075)
+- Added a new VS Code toggle setting that allows users to show or hide hidden files in the Unix System Service (USS) tree view.[#3912](https://github.com/zowe/zowe-explorer-vscode/issues/3912)
+- Added a new VS Code setting that allows users to limit the number of concurrent REST requests sent to z/OSMF. [#4130](https://github.com/zowe/zowe-explorer-vscode/pull/4130)
+
+### Bug fixes
+
+- Fixed an issue where file system calls incorrectly threw a FileNotFound error for existing files, ensuring they are now fetched correctly. [#3554](https://github.com/zowe/zowe-explorer-vscode/issues/3554)
+- Fixed an issue where file system URIs with trailing slashes failed to resolve. [#3904](https://github.com/zowe/zowe-explorer-vscode/issues/3904)
+- Fixed an accessibility issue where focus was lost after renaming a dataset, dataset member, USS file, or USS directory. Focus now remains on the renamed item, and screen readers receive a confirmation message indicating the successful rename. [#4032](https://github.com/zowe/zowe-explorer-vscode/issues/4032)
+- Fixed an issue where pasting data sets failed with "e.getChildren is not a function" when using extenders that don't support `allocateLikeDataSet`, a function that allocates a copy of a data set with specified options. [#4107](https://github.com/zowe/zowe-explorer-vscode/pull/4107)
+- Fixed an issue where the "Created Date" and "Modified Date" columns were not sortable in the data sets table view, specifically when the user's locale differs from the default value (`en (en-US)`). Now, sorting works regardless of the VS Code language setting, and dates are now formatted with the user's locale. [#4008](https://github.com/zowe/zowe-explorer-vscode/pull/4008)
+- Fixed an issue where an error appeared when moving an empty PDS across LPARs. [#4001](https://github.com/zowe/zowe-explorer-vscode/pull/4001)
+- Fixed an issue with the "Create New Data Set" feature where a data set attribute's original value was deleted after the user dismissed the input box. Now, the attribute's value is preserved when the user cancels their input. [#4003](https://github.com/zowe/zowe-explorer-vscode/issues/4003)
+- Updated Zowe SDKs to `8.31.0` for technical currency. [#4117](https://github.com/zowe/zowe-explorer-vscode/pull/4117)
+- Fixed an issue where screen readers could not read dataset attributes from the dataset attribute webview.[#4023](https://github.com/zowe/zowe-explorer-vscode/issues/4023)
+- Corrected description of the `mnorc` attribute for PDS members. [#4116](https://github.com/zowe/zowe-explorer-vscode/pull/4116)
+- Fixed slow performance when listing a large number of data sets or members. [#4116](https://github.com/zowe/zowe-explorer-vscode/pull/4116)
+- Fixed an accessibility issue where screen readers did not provide instructions for configuring job polling. Added descriptive prompts and placeholder text explaining how polling works, the expected input format, and what happens when polling is active. [#4029](https://github.com/zowe/zowe-explorer-vscode/issues/4029)
+- Fixed an issue where filtering a data set by Date Modified showed members without date attributes. [#4075](https://github.com/zowe/zowe-explorer-vscode/pull/4075/)
+- Fixed an accessibility issue where screen readers could not access the job ID link after job submission. Replaced the inaccessible markdown link with keyboard-accessible "Open Job" button that can be navigated using Tab and activated with Enter or Space keys. [#4030](https://github.com/zowe/zowe-explorer-vscode/issues/4030)
+- Fixed an issue where focus was lost on a previously selected tree item after opening a Zowe resource (Data set, USS file, or Job) in the editor and closing it using `Ctrl+W`. Screen readers will now announce when focus is restored. [#4025](https://github.com/zowe/zowe-explorer-vscode/issues/4025)
+- Fixed an issue where loading profiles could wrongly assume token authentication if parent profile defines multiple auth types. [#4105](https://github.com/zowe/zowe-explorer-vscode/issues/4105)
+- Fixed an issue where the USS tree collapsed down to the top level set from the initial filter.[#3932](https://github.com/zowe/zowe-explorer-vscode/issues/3932)
+
+## `3.4.2`
+
+### New features and enhancements
+
+- Exposed commands to drive search in the USS views. [#3933](https://github.com/zowe/zowe-explorer-vscode/issues/3933)
+- Exposed commands to drive filtering in the Data Sets views [#3992](https://github.com/zowe/zowe-explorer-vscode/issues/3992)
+
+### Bug fixes
+
+- Fixed an issue where files opened via extender profiles failed to refresh or reload correctly. [#4049](https://github.com/zowe/zowe-explorer-vscode/pull/4049)
+- Fixed an issue where the data set sort persistence was overriding the selected sort direction. [#4048](https://github.com/zowe/zowe-explorer-vscode/pull/4048)
+- Fixed an accessibility issue in the "Create New Data Set" flow by replacing click-oriented instructions with clearer keyboard- and screen reader-friendly prompts and step titles. [#4026](https://github.com/zowe/zowe-explorer-vscode/issues/4026)
+- Updated Zowe SDKs to `8.30.1` for technical currency. [#4079](https://github.com/zowe/zowe-explorer-vscode/pull/4079)
+- Fixed an issue where screen readers could not read data set attributes from the data set attribute webview.[#4023](https://github.com/zowe/zowe-explorer-vscode/issues/4023)
+- Fixed tooltip for Unix System Services profiles to display relevant text. [#4019](https://github.com/zowe/zowe-explorer-vscode/issues/4019)
+- Fixed an accessibility issue in the "Add Profile" dialog where the placeholder text did not match the actual available options. The instructions now clearly reference "Create a New Team Configuration File" and "Edit Team Configuration File" to guide keyboard and screen reader users. [#4028](https://github.com/zowe/zowe-explorer-vscode/issues/4028)
+- Fixed an accessibility issue where the "Create File" and "Create Directory" actions used the same generic instruction "Name of file or directory". The instructions are now specific to the selected action and clearly indicate what is required. [#4027](https://github.com/zowe/zowe-explorer-vscode/issues/4027)
+- Fixed an issue that prevented screen readers from reading Unix file attributes in the Unix file attributes webview, and added clear tags to help users understand how to edit those attributes.[#4024](https://github.com/zowe/zowe-explorer-vscode/issues/4024)
+
+## `3.4.1`
+
+### Bug fixes
+
+- Updated Zowe SDKs to `8.29.9` for technical currency. [#4040](https://github.com/zowe/zowe-explorer-vscode/pull/4040)
+- Fixed an issue where logical record length truncation detection failed for extenders. [#4002](https://github.com/zowe/zowe-explorer-vscode/pull/4002)
+- Fixed issue seen with profile hover information getting out of date or out of sync. [#3638](https://github.com/zowe/zowe-explorer-vscode/issues/3638)
+
+## `3.4.0`
+
+### New features and enhancements
+
+- Added support to delete VSAM data sets. [#3824](https://github.com/zowe/zowe-explorer-vscode/issues/3824)
+- Refactored data set pagination to use the new `getCount` API (if available) to optimize access to the total item count.[#3844](https://github.com/zowe/zowe-explorer-vscode/pull/3844)
+- Added support for `jobEncoding` profile property when submitting jobs to z/OSMF. [#3826](https://github.com/zowe/zowe-explorer-vscode/issues/3826)
+- Added support for `encoding` profile property when retrieving JCL with z/OSMF. [#3877](https://github.com/zowe/zowe-explorer-vscode/pull/3877)
+- Updated `js-yaml` dependency for technical currency. [#3937](https://github.com/zowe/zowe-explorer-vscode/pull/3937)
+- Updated Zowe SDKs to version `8.28.0` to address an issue where copying a PDS member to a data set across LPARs failed. This occurred when the target PDS already contained members, but none matched the name of the PDS member being copied. [#3848](https://github.com/zowe/zowe-explorer-vscode/pull/3896)
+- Added support for copying data sets from multiple source LPARs at once in the cross-LPAR copy/paste functionality. [#3945](https://github.com/zowe/zowe-explorer-vscode/issues/3945)
+- Added support for loading credential manager options from the imperative.json file. Add a `credentialManagerOptions` object in the JSON object in `imperative.json` to specify options for the current credential manager. [#3935](https://github.com/zowe/zowe-explorer-vscode/pull/3935)
+- Added support for custom persistence levels for Windows (persist option) to support the credential manager in less permissive environments. For more information on how to configure this option, refer to the ["Troubleshooting Zowe CLI credentials"](https://docs.zowe.org/stable/troubleshoot/cli/troubleshoot-cli-credentials/#secrets-sdk-persistence-level-for-windows) page on Zowe Docs. [#3935](https://github.com/zowe/zowe-explorer-vscode/pull/3935)
+- Updated minimum VS Code version from 1.79 to 1.90. We are dropping support for VS Code releases that bundle versions of Node.js no longer receiving security updates. [#3684](https://github.com/zowe/zowe-explorer-vscode/issues/3684)
+- Added support for downloading data sets, data set members, USS files, and USS directories. [#3843](https://github.com/zowe/zowe-explorer-vscode/pull/3843)
+
+### Bug fixes
+
+- Prevent drag-and-drop between profiles when the source and target resolve to the same physical object. The operation is now blocked and an explanatory error is shown. Users should refresh the target profile to see changes. [#3827](https://github.com/zowe/zowe-explorer-vscode/pull/3827)
+- Fixed an issue where the job spool pagination code lens was appearing even though the extender did not support pagination. [#3714](https://github.com/zowe/zowe-explorer-vscode/issues/3714)
+- Fixed an issue where deleting an open PDS that is empty resulted in an error. [#3908](https://github.com/zowe/zowe-explorer-vscode/pull/3908)
+- Fixed duplicate credential prompts that occurred when logging out of SSO with multiple virtual workspaces open. [#3858](https://github.com/zowe/zowe-explorer-vscode/issues/3858)
+- Fixed race conditions in parallel file system calls made with invalid credentials. [#3830](https://github.com/zowe/zowe-explorer-vscode/pull/3830)
+- Fixed job spool poll command to refresh the job spool open in the editor. [#3867](https://github.com/zowe/zowe-explorer-vscode/issues/3867)
+- Fixed regression where PDS member attributes were no longer listed when using the "Show Attributes" feature from the data set context menu. [#3856](https://github.com/zowe/zowe-explorer-vscode/issues/3856)
+- Fixed an issue where user attempts to perform a search on an individual PDS from the Zowe-Explorer extension using the "Search PDS members" action and query a search string, it brings out additional dataset as a part of the result.[#3682](https://github.com/zowe/zowe-explorer-vscode/issues/3682)
+- Fixed an issue where loading of virtual workspaces interfered with the activation of some Zowe Explorer extensions. [#3923](https://github.com/zowe/zowe-explorer-vscode/pull/3923)
+- Fixed issue seen by extender profile types where a type error was returned with 401 instead of notification with update option. [#3943](https://github.com/zowe/zowe-explorer-vscode/issues/3943)
+- Fixed release notes displaying when Zowe Explorer is installed for the first time. [#3966](https://github.com/zowe/zowe-explorer-vscode/pull/3966)
+- Fixed release notes displaying when the Zowe Explorer version is downgraded. [#3966](https://github.com/zowe/zowe-explorer-vscode/pull/3966)
+- Fixed issue where the Show Attributes view displayed "Open virtualization format" under data set attributes instead of "Space overflow" for the `ovf` attribute key. [#3985](https://github.com/zowe/zowe-explorer-vscode/issues/3985)
+- Fixed issue where favorited items caused a failure during initialization, specifically when the favorited item belongs to a profile type that's no longer registered or accessible. [#3962](https://github.com/zowe/zowe-explorer-vscode/pull/3962)
+- Fixed issue where the filesystem throws a vague `Unknown` FileSystemError if an API cannot be loaded for the given profile type. Now, if the API is inaccessible for the given profile type, an `Unavailable` error is thrown from the filesystem with more context. [#3962](https://github.com/zowe/zowe-explorer-vscode/pull/3962)
+- Updated Zowe SDKs to version `8.28.0` to address an issue where copying a PDS member to a data set across LPARs failed. This occurred when the target PDS already contained members, but none matched the name of the PDS member being copied. [#3848](https://github.com/zowe/zowe-explorer-vscode/pull/3896)
+- Updated `js-yaml` dependency for technical currency. [#3937](https://github.com/zowe/zowe-explorer-vscode/pull/3937)
+- Removed a misleading password prompt when issuing Unix commands. [#3940](https://github.com/zowe/zowe-explorer-vscode/pull/3940)
+- Fixed an issue where moving a PDS member into the "No members found" placeholder of an empty PDS deleted the member without transferring its data. [#3950](https://github.com/zowe/zowe-explorer-vscode/issues/3950)
+- Fixed PDS members and USS files not being supported as drop targets when resources are drag-and-dropped. [#3999](https://github.com/zowe/zowe-explorer-vscode/pull/3999)
+
+## `3.3.1`
+
+### Bug fixes
+
+- Fixed an issue where `ssh` type profiles were throwing errors when making file system calls. [#3891](https://github.com/zowe/zowe-explorer-vscode/pull/3891)
+- Added support for fetching virtual workspaces in parallel after Zowe Explorer activation. [#3880](https://github.com/zowe/zowe-explorer-vscode/issues/3880)
+- Added retry support for file system calls so operations can continue after credentials are updated. [#3726](https://github.com/zowe/zowe-explorer-vscode/issues/3726)
+- Fixed issues seen when user is prompted, having v1 profiles and chooses convert or create new config options.[#3757](https://github.com/zowe/zowe-explorer-vscode/issues/3757)
+- Fixed an error encountered when deleting members in a PDS. [#3874](https://github.com/zowe/zowe-explorer-vscode/issues/3874)
+- Fixed regression where PDS member attributes were no longer listed when using the "Show Attributes" feature from the data set context menu. [#3856](https://github.com/zowe/zowe-explorer-vscode/issues/3856)
+- Fixed job spool poll command to refresh the job spool open in the editor. [#3867](https://github.com/zowe/zowe-explorer-vscode/issues/3867)
+- Fixed regression where a profile was incorrectly detected as using basic authentication, specifically when `tokenValue` was set in the secure array of a parent profile or a default base profile instead of a service profile. [#3855](https://github.com/zowe/zowe-explorer-vscode/pull/3855)
+- Fixed an issue where uploading a file to a data set or USS from a Windows machine caused extra carriage return characters to be included in its contents. Now, carriage returns are filtered out from carriage return/line feed (CRLF) sequences during upload. [#3853](https://github.com/zowe/zowe-explorer-vscode/issues/3853)
+- Fixed an issue where opening a USS file would show empty contents when an error occurred while fetching the file from the mainframe, instead of displaying an error message. [#3894](https://github.com/zowe/zowe-explorer-vscode/issues/3894)
+- Fixed an issue where the Delete action in the Data Sets tree could delete a PDS member previously selected in the tree rather than the one that was right-clicked. [#3883](https://github.com/zowe/zowe-explorer-vscode/issues/3883)
+- Fixed an issue where switching to a custom credential manager did not update the `imperative.json` file. [#3705](https://github.com/zowe/zowe-explorer-vscode/issues/3705)
+- Updated Zowe SDKs to version `8.28.0` to address an issue where copying a PDS member to a data set across LPARs failed. This occurred when the target PDS already contained members, but none matched the name of the PDS member being copied. [#3848](https://github.com/zowe/zowe-explorer-vscode/pull/3896)
+- Fixed an issue where user attempts to perform a search on an individual PDS from the Zowe-Explorer extension using the "Search PDS members" action and query a search string, it brings out additional dataset as a part of the result.[#3682](https://github.com/zowe/zowe-explorer-vscode/issues/3682)
+- Fixed an issue where loading of virtual workspaces interfered with the activation of some Zowe Explorer extensions. [#3923](https://github.com/zowe/zowe-explorer-vscode/pull/3923)
+- Updated `js-yaml` dependency for technical currency. [#3937](https://github.com/zowe/zowe-explorer-vscode/pull/3937)
+- Removed a misleading password prompt when issuing Unix commands. [#3940](https://github.com/zowe/zowe-explorer-vscode/pull/3940)
+
+## `3.3.0`
+
+### New features and enhancements
+
+- Added VSCode setting to allow users to enable and disable using the default TSO profile for issuing TSO commands. The default is set to true if a default TSO profile is set as the default. [#2528](https://github.com/zowe/zowe-explorer-vscode/issues/2528)
+- Added capability for extenders to provide additional attributes for data sets. [#3730](https://github.com/zowe/zowe-explorer-vscode/pull/3730)
+- Added hostname validation to prevent encountering a VS Code Proxy bug that occurs when attempting to connect to a z/OSMF server with the protocol specified as part of the hostname. [#3364](https://github.com/zowe/zowe-explorer-vscode/issues/3364)
+- Added a `zowe.settings.socketConnectTimeout` setting to provide users with the ability to specify a connection timeout for REST requests. [#3379](https://github.com/zowe/zowe-explorer-vscode/issues/3379)
+- Added a `zowe.settings.requestTimeout` setting to provide users with the ability to specify a request timeout for REST requests. [#3631](https://github.com/zowe/zowe-explorer-vscode/pull/3631)
+- Added the ability to open a data set from text selected in an Editor tab. [#3679](https://github.com/zowe/zowe-explorer-vscode/issues/3679)
+- Added a Release Notes page which opens when VS Code is launched or from the command palette `Display Release Notes`. The `zowe.settings.displayReleaseNotes` setting can be changed to set when the release notes display. [#3621](https://github.com/zowe/zowe-explorer-vscode/issues/3621)
+- Added support for asynchronous operations when using integrated terminals. [#3640](https://github.com/zowe/zowe-explorer-vscode/issues/3640)
+- Added support for TTY-dependent scripts when using integrated terminals. [#3640](https://github.com/zowe/zowe-explorer-vscode/issues/3640)
+- Adjusted formatting for the certificate selection webview to make better use of space. [#3754](https://github.com/zowe/zowe-explorer-vscode/issues/3754)
+- Added the ability to poll on active jobs in the current filtered jobs tree. If an active job completes while polling, a notification that the job has completed displays. [#3472](https://github.com/zowe/zowe-explorer-vscode/issues/3472)
+- Added "Show as Table" option for profiles with search patterns in the Data Sets tree. Users can now right-click on a profile in the Data Sets tree with a search pattern set and select "Show as Table" to view matching data sets in a tabular format. [#3583](https://github.com/zowe/zowe-explorer-vscode/issues/3583)
+- Added "Show as Table" option for partitioned data sets. Users can now right-click on a partitioned data set in the Data Sets tree and select "Show as Table" to view its members in a tabular format. [#3583](https://github.com/zowe/zowe-explorer-vscode/issues/3583)
+- Added "Zowe Explorer: List Data Sets" command. Users can now run this command from the command palette to be prompted for a search pattern and display the matching data sets in a table view. [#3583](https://github.com/zowe/zowe-explorer-vscode/issues/3583)
+- When the user types in a data set pattern in the input box of the filter selection prompt, the "Create a new filter" option now updates to include the pattern. Once clicked, the new filter is added to the user's search history and the pattern is used for listing data sets. [#3015](https://github.com/zowe/zowe-explorer-vscode/issues/3015)
+- When the user types in a USS file path in the input box of the filter selection prompt, the "Create a new filter" option now updates to include the file path. Once clicked, the new filter is added to the user's search history and the path is used for listing a USS directory. [#3015](https://github.com/zowe/zowe-explorer-vscode/issues/3015)
+- Added "Upload with Encoding" option for USS directories and partitioned data sets. Users can now right-click on a directory or PDS in the USS or Data Sets tree and select "Upload with Encoding..." to choose a character encoding for the uploaded files. [#3193](https://github.com/zowe/zowe-explorer-vscode/issues/3193)
+- The selected sort order for a data set is now persisted between sessions. [#3798](https://github.com/zowe/zowe-explorer-vscode/pull/3798)
+
+### Bug fixes
+
+- Fixed a bug where a password prompt appeared when validating SSH profiles even if a valid `privateKey` is provided. [#3645](https://github.com/zowe/zowe-explorer-vscode/issues/3645)
+- Fixed a bug where renaming a USS file that used to exist but was deleted in z/OS resulted in an error. [#3485](https://github.com/zowe/zowe-explorer-vscode/issues/3485).
+- Fixed a bug where USS and data set workspace folders accessed via an extender (SSH, FTP, etc) are not loaded until the window is reloaded. [#3689](https://github.com/zowe/zowe-explorer-vscode/pull/3689/files#diff-cafba17e22a5c24da1eeb2601f25d6025d598f5462cce554aeca3b56bc9661cf)
+- Fixed a bug where USS files and data set VS Code editors accessed by an extender (SSH, FTP, etc) are not restored when reloading/reopening a window. [#3678](https://github.com/zowe/zowe-explorer-vscode/pull/3678)
+- Fixed an issue where an incorrect profile name is shown in the output for the "Issue Unix Command" function when an SSH profile is required to issue commands. [#3646](https://github.com/zowe/zowe-explorer-vscode/issues/3646)
+- Improved integrated terminal behavior to match standard terminal functionality. Now, users can smoothly maintain proper cursor position when typing and backspacing. [#3391](https://github.com/zowe/zowe-explorer-vscode/issues/3391)
+- Fixed an issue where cancelling multiple commands in rapid succession could render the terminal unusable. [#3640](https://github.com/zowe/zowe-explorer-vscode/issues/3640)
+- Fixed an issue where a `401 Unauthorized` error is thrown by the FileSystemProvider implementations when the user cancels or closes an authentication prompt. Now, the filesystem throws a more explicit `AuthCancelledError` in this scenario. [#3662](https://github.com/zowe/zowe-explorer-vscode/issues/3662)
+- Fixed an issue where renaming or deleting the team configuration file caused an unhandled exception in Zowe Explorer, causing old, non-existent profiles to remain in the tree views. [#3772](https://github.com/zowe/zowe-explorer-vscode/issues/3772)
+- Fixed a regression with the `AuthUtils.syncSessionNode` function that caused Zowe Explorer logic to stop unexpectedly if a session node did not yet have a rich hover tooltip. [#3795](https://github.com/zowe/zowe-explorer-vscode/pull/3795)
+- Fix for profile status check when certificate authentication is used and an invalid certificate is used. [#3699](https://github.com/zowe/zowe-explorer-vscode/issues/3699)
+- Prevented data loss by modifying the save process to handle data sets with records that exceeded the logical record length. [#3791](https://github.com/zowe/zowe-explorer-vscode/issues/3791)
+- Fixed cross-LPAR PDS transfers to preserve original DCB attributes and prevent binary data corruption. Data is now transferred as binary, and the encoding is respected if previously set by the user. [#3731](https://github.com/zowe/zowe-explorer-vscode/pull/3731)
+- Fixed copy/paste functionality of data sets for extender-type profiles by using `SharedContext` helper functions. [#3815](https://github.com/zowe/zowe-explorer-vscode/pull/3815)
+- Fixed issue where the `getChildren` function made requests repeatedly while the data set filter prompt was open, causing repeated authentication prompts and excessive requests for listing data sets. [#3807](https://github.com/zowe/zowe-explorer-vscode/issues/3807)
+
+## `3.2.2`
+
+### Bug fixes
+
+- Fixed an issue where clicking the refresh icon beside a profile in the Unix System Services (USS) view had no effect. [#3693](https://github.com/zowe/zowe-explorer-vscode/issues/3693)
+- Fixed a bug where USS files and data set VS Code editors accessed by an extender (SSH, FTP, etc) are not restored when reloading/reopening a window. [#3678](https://github.com/zowe/zowe-explorer-vscode/pull/3678)
+- Fix issues seen with out of date profile information within Zowe Explorer tree views. [#3664](https://github.com/zowe/zowe-explorer-vscode/issues/3664)
+- Fixed an issue where clicking the Cancel button in the Save Credentials dialog triggered a 401 error prompting to update credentials. [#3713](https://github.com/zowe/zowe-explorer-vscode/pull/3713)
+- Resolved an issue where secure credentials were inadvertently converted to non-string data types. [#3728](https://github.com/zowe/zowe-explorer-vscode/issues/3728)
+- Changed the jobs pagination setting to be disabled by default and the default records to fetch from 100 to 1000 due to customer feedback. [#3743](https://github.com/zowe/zowe-explorer-vscode/issues/3743)
+- Updated Zowe SDKs to `8.26.1` for technical currency. [#3696](https://github.com/zowe/zowe-explorer-vscode/pull/3696)
+
+## `3.2.1`
+
+### New features and enhancements
+
+- Updated Zowe SDKs to `8.21.0` for technical currency. [#3668](https://github.com/zowe/zowe-explorer-vscode/pull/3668)
+
+### Bug fixes
+
+- Fixed an issue in the `Switch Authentication` action, where changing from token-based authentication to username and password authentication did not properly invalidate the token. [#3654](https://github.com/zowe/zowe-explorer-vscode/issues/3654)
+- Fixed an issue where an unhandled exception occurs when creating profile hover information if the `autoStore` property is missing from the Zowe team configuration. [#3643](https://github.com/zowe/zowe-explorer-vscode/issues/3643)
+
+## `3.2.0`
+
+### New features and enhancements
+
+- Added pagination functionality for job spool files and created a key binding option (`ctrl + l`) to load more job spool records. [#1787](https://github.com/zowe/zowe-explorer-vscode/issues/1787)
+- Added case sensitive and regular expression search options to Data Set searches. [#3455](https://github.com/zowe/zowe-explorer-vscode/issues/3455)
+- Added filtered and partitioned data set search history. [#3455](https://github.com/zowe/zowe-explorer-vscode/issues/3455)
+- Updated Zowe SDKs to `8.16.0` to include the latest enhancements from Imperative and the z/OS Files SDK. [#3526](https://github.com/zowe/zowe-explorer-vscode/pull/3526)
+- Added Time Started, Time Ended, and Time Submitted job properties to the Jobs table view. [#3055](https://github.com/zowe/zowe-explorer-vscode/issues/3055)
+- Implemented copy/paste functionality of data sets within and across LPARs. [#3012](https://github.com/zowe/zowe-explorer-vscode/issues/3012)
+- Implemented drag and drop functionality of data sets within and across LPARs. [#3413](https://github.com/zowe/zowe-explorer-vscode/pull/3413)
+- Adopted new Zowe Explorer API, `ZoweVsCodeExtension.createTeamConfiguration` for Zowe team configuration creation. [#3088](https://github.com/zowe/zowe-explorer-vscode/issues/3088)
+- Adopted ZE APIs new `directConnectLogin` and `directConnectLogout` methods for login and logout actions NOT using the tokenType `apimlAuthenticationToken`. [#3346](https://github.com/zowe/zowe-explorer-vscode/issues/3346)
+- Implemented Client Side Certificate Authentication support for z/OSMF. [#2373](https://github.com/zowe/zowe-explorer-vscode/issues/2373)
+- Added the "Copy Name" option to VSAM data sets. [#3466](https://github.com/zowe/zowe-explorer-vscode/issues/3466)
+- The refresh button in each tree view (Data Sets, Unix System Services, and Jobs) now refreshes all profile nodes in the tree. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Users can now update the credentials for a profile when the `autoStore` property is set to `false` in a team configuration. When `autoStore` is `false`, the new credentials are only saved in memory, and these credentials persist until the user updates them again or closes VS Code. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Optimized the refresh functionality in Zowe Explorer for performance and stability. Now, the profiles are refreshed once before refreshing all the tree providers. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Implemented the `SharedActions.refreshProvider` function to allow refreshing a single tree provider. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Added command to filter the USS tree by the path of a selected node. [#1783](https://github.com/zowe/zowe-explorer-vscode/issues/1783).
+- Added a button to filter the USS tree by the parent path of the current filter. [#1783](https://github.com/zowe/zowe-explorer-vscode/issues/1783).
+- Added an new VS Code command palette option `Zowe Explorer: Update Profile Configuration Schema`, allowing users to manually trigger an update to global and project level configuration schema files with registered Zowe Explorer extender types. [#1642](https://github.com/zowe/zowe-explorer-vscode/issues/1642)
+- Added script that will fetch latest localizations at every build now. [#3573](https://github.com/zowe/zowe-explorer-vscode/pull/3573)
+- Implemented copy/paste functionality of data sets within and across LPARs. [#3012](https://github.com/zowe/zowe-explorer-vscode/issues/3012)
+- Implemented drag and drop functionality of data sets within and across LPARs. [#3413](https://github.com/zowe/zowe-explorer-vscode/pull/3413)
+- Added a new "Override with Environment Variables" setting. When selected, Zowe Explorer prioritizes values from environment variables for properties when loading the user's team configuration. [#3591](https://github.com/zowe/zowe-explorer-vscode/pull/3591)
+- Implemented rich hover for Zowe Explorer profiles to show connection information. [#3580](https://github.com/zowe/zowe-explorer-vscode/pull/3580)
+- Added pagination support for data sets and PDS members. Now, the **Data Sets** tree view provides navigation controls and separates the list of items into pages. Users can configure the maximum amount of data sets to list per page by changing the **Zowe -> Ds -> Paginate: Data Sets Per Page** setting. [#3585](https://github.com/zowe/zowe-explorer-vscode/pull/3585)
+
+### Bug fixes
+
+- Fixed an issue where dragging and dropping data sets across LPARs resulted in silent failure. [#3542](https://github.com/zowe/zowe-explorer-vscode/issues/3542)
+- Replaced an import of ILocalStorageAccess from "@zowe/zowe-explorer-api/src/extend/ILocalStorageAccess" to "@zowe/zowe-explorer-api". [#3606](https://github.com/zowe/zowe-explorer-vscode/issues/3606)
+- Fixed an issue where edit history does not show the correct information. [#3432](https://github.com/zowe/zowe-explorer-vscode/issues/3432)
+- Fixed an issue where the 'Delete' key binding for the USS tree returns a 'contextValue' error. [#2796](https://github.com/zowe/zowe-explorer-vscode/issues/2796)
+- Fixed an issue where cancelling Unix, MVS or TSO command still submits the command. [#3422](https://github.com/zowe/zowe-explorer-vscode/issues/3422)
+- Fixed an issue where user is unable to open a renamed sequential data set from the Data Sets tree view.. [#3345](https://github.com/zowe/zowe-explorer-vscode/issues/3345)
+- Fixed an issue where the token expiration check was performed on profiles with APIs that do not support token types. [#3525](https://github.com/zowe/zowe-explorer-vscode/pull/3525)
+- Fixed an issue where the attributes were not shown for VSAM data sets when using the Show Attributes feature. [#3545](https://github.com/zowe/zowe-explorer-vscode/issues/3545)
+- Fixed an issue where right-click menu for data set shows wrong options after deleting multiple PDS members. [#3516](https://github.com/zowe/zowe-explorer-vscode/issues/3516)
+- Fixed an issue where the source data set was removed even though the move operation was not successful. [#3518](https://github.com/zowe/zowe-explorer-vscode/pull/3518)
+- Updated dependencies for technical currency purposes. [#3576](https://github.com/zowe/zowe-explorer-vscode/pull/3576)
+- Fixed an issue where data sets were not requested with attributes if the profile type's API did not implement the `dataSetsMatchingPattern` function. [#3578](https://github.com/zowe/zowe-explorer-vscode/pull/3578)
+- Fixed an issue where remote changes to a data set member are not detected by Zowe Explorer if the member's resource path ends in an extension. [#3555](https://github.com/zowe/zowe-explorer-vscode/issues/3555)
+- Fixed an issue where a newly-created data set member might be opened without an extension. [#3555](https://github.com/zowe/zowe-explorer-vscode/issues/3555)
+- Fixed an issue where copy-and-pasting an empty PDS within the same LPAR would result in an error. [#3541](https://github.com/zowe/zowe-explorer-vscode/issues/3541)
+- Fixed an issue where favorites for extender profile types were duplicated in the tree views. [#3548](https://github.com/zowe/zowe-explorer-vscode/issues/3548)
+- Fixed an issue where multiple directories with the same name could not be favorited in the USS tree. [#3590](https://github.com/zowe/zowe-explorer-vscode/pull/3590)
+- Fixed an issue where an invalid token in a base configuration profile will take precedence over a plaintext user/password in a service configuration profile. [#3575](https://github.com/zowe/zowe-explorer-vscode/pull/3575)
+- Fixed an issue where profiles that were not utilizing tokens were improperly running `checkJwtForProfile()` function within the `ZoweTreeProvider`. [#3575](https://github.com/zowe/zowe-explorer-vscode/pull/3575)
+- Fixed an issue where searching for the root directory (`/`) under a profile caused the profile to show a placeholder rather than a list of the files and folders at that path. [#3603](https://github.com/zowe/zowe-explorer-vscode/pull/3603)
+- Fixed an issue where dragging and dropping a USS file caused an unhandled error while finalizing the drop operation. [#3613](https://github.com/zowe/zowe-explorer-vscode/issues/3613)
+- Fixed an issue where the `onProfileUpdated` event emitter was not guaranteed to be the same across Zowe Explorer and extenders, causing some event listeners to not fire when an extender fires the event emitter. [#3622](https://github.com/zowe/zowe-explorer-vscode/issues/3622)
+
+## `3.1.2`
+
+### New features and enhancements
+
+- Renamed "Zowe Explorer z/OS Console" to "z/OS Console". [#3445](https://github.com/zowe/zowe-explorer-vscode/pull/3445)
+- The "Open Recent Member" command can now be triggered from the command palette. [#3477](https://github.com/zowe/zowe-explorer-vscode/pull/3477)
+
+### Bug fixes
+
+- Fixed missing z/OS Console icon when `Workbench > Panel: Show Labels` is set to false. [#3293](https://github.com/zowe/zowe-explorer-vscode/issues/3293)
+- Fixed z/OS Console panel background colour to be in sync with the rest of the VS Code styling. [#3445](https://github.com/zowe/zowe-explorer-vscode/pull/3445)
+- Fixed an issue seen with outdated profile information in the z/OS tree view data during upload and download of data set and USS files. [#3457](https://github.com/zowe/zowe-explorer-vscode/issues/3457)
+- Fixed issue where deleting too many nodes at once would cause the confirmation prompt to be oversized. [#3254](https://github.com/zowe/zowe-explorer-vscode/issues/3254)
+- Fixed an issue with UNIX file edit attributes refresh button not updating/reverting values correctly. [#3238](https://github.com/zowe/zowe-explorer-vscode/issues/3238)
+- Fixed an issue seen where extender favorites not showing in the tree views. [#3470](https://github.com/zowe/zowe-explorer-vscode/issues/3470)
+- Fixed an issue where data set migration status was incorrectly handled when the `migr` attribute was not present in the API response. [#3471](https://github.com/zowe/zowe-explorer-vscode/issues/3471)
+- Fixed an issue where selecting items in table views would reset the column sort order. [#3473](https://github.com/zowe/zowe-explorer-vscode/issues/3473)
+- Fixed issue where users were prompted several times when using a profile with invalid credentials in a VS Code workspace. Now, the user is only prompted once per profile, allowing the user to enter in new credentials. [#3480](https://github.com/zowe/zowe-explorer-vscode/pull/3480)
+- Fixed issue where selecting a recent member to open from a profile name that no longer exists would cause an error. [#3447](https://github.com/zowe/zowe-explorer-vscode/issues/3447)
+- Fixed issue with a conflicting keybinding for `Open Recent Member`, changed keybinding to `Ctrl`+`Alt`+`t` for Windows and `⌘ Cmd`+`⌥ Opt`+`t` for macOS. [#3447](https://github.com/zowe/zowe-explorer-vscode/issues/3447)
+- Fixed issue where saving data set member to history would save only the member name instead of the full path. [#3447](https://github.com/zowe/zowe-explorer-vscode/pull/3477)
+- Fixed an issue where profile encoding is not respected when opening job spool files. [#3504](https://github.com/zowe/zowe-explorer-vscode/issues/3504)
+- Fixed an issue where cancelling Unix, MVS or TSO command still submits the command. [#3422](https://github.com/zowe/zowe-explorer-vscode/issues/3422)
+- Fixed a bug where edit history does not show the correct information. [#3432](https://github.com/zowe/zowe-explorer-vscode/issues/3432)
+- Fixed an issue where an invalid session on a profile caused an unexpected `Profile auth error` login dialog to appear. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Fixed an issue where the `SharedActions.refreshAll` function runs unexpectedly while a user performs an action in the tree views (such as listing data sets, USS files, jobs, etc.). [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Fixed an issue where the first change to a Zowe team configuration did not accurately refresh the data set, USS and job trees. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+- Fixed an issue where the `AuthUtils.syncSessionNode` function did not handle errors thrown by the `ZoweTreeNode.setSessionToChoice` function. Now, when an error occurs, the function returns early and the error message is printed to Zowe Explorer's logs and output channel. [#3524](https://github.com/zowe/zowe-explorer-vscode/pull/3524)
+
+## `3.1.1`
+
+### Bug fixes
+
+- Fixed an issue where a TypeError occurred when applying VS Code proxy settings to an invalid session. [#3425](https://github.com/zowe/zowe-explorer-vscode/issues/3425)
+
+## `3.1.0`
+
+### New features and enhancements
+
+- Updated Zowe SDKs to `8.10.4` for technical currency. [#3306](https://github.com/zowe/zowe-explorer-vscode/pull/3306)
+- Added expired JSON web token detection for profiles in each tree view (Data Sets, USS, Jobs). When a user performs a search on a profile, they are prompted to log in if their token expired. [#3175](https://github.com/zowe/zowe-explorer-vscode/issues/3175)
+- Added integrated terminals for z/OS Unix, TSO, and MVS commands which can be enabled via the `Zowe › Commands: Use Integrated Terminals` setting. [#3079](https://github.com/zowe/zowe-explorer-vscode/pull/3079)
+- Add a data set or USS resource to a virtual workspace with the new "Add to Workspace" context menu option. [#3265](https://github.com/zowe/zowe-explorer-vscode/issues/3265)
+- Power users and developers can now build links to efficiently open mainframe resources in Zowe Explorer. Use the **Copy External Link** option in the context menu to get the URL for a data set or USS resource, or create a link in the format `vscode://Zowe.vscode-extension-for-zowe?<ZoweResourceUri>`. For more information on building resource URIs, see the [FileSystemProvider wiki article](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider#file-paths-vs-uris). [#3271](https://github.com/zowe/zowe-explorer-vscode/pull/3271)
+- Adopted support for VS Code proxy settings with zosmf profile types. [#3010](https://github.com/zowe/zowe-explorer-vscode/issues/3010)
+- Implemented more user-friendly error messages for API or network errors within Zowe Explorer. [#3243](https://github.com/zowe/zowe-explorer-vscode/pull/3243)
+- Use the "Troubleshoot" option for certain errors to obtain additional context, tips, and resources for how to resolve the errors. [#3243](https://github.com/zowe/zowe-explorer-vscode/pull/3243)
+- Easily search for data in filtered data sets and partitioned data sets with the new `Search Filtered Data Sets` and `Search PDS Members` functionality. [#3306](https://github.com/zowe/zowe-explorer-vscode/pull/3306)
+- Allow extenders to add context menu actions to a top level node, i.e. data sets, USS, Jobs, by encoding the profile type in the context value. [#3309](https://github.com/zowe/zowe-explorer-vscode/pull/3309)
+- You can now add multiple partitioned data sets or USS directories to your workspace at once using the "Add to Workspace" feature. [#3324](https://github.com/zowe/zowe-explorer-vscode/issues/3324)
+- Exposed read and write access to local storage keys for Zowe Explorer extenders. [#3180](https://github.com/zowe/zowe-explorer-vscode/issues/3180)
+- Added `Open with Encoding` to the context menu of Job Spool files. [#1941](https://github.com/zowe/zowe-explorer-vscode/issues/1941)
+- Added two new settings, `zowe.ds.default.sort` and `zowe.jobs.default.sort`, that allow you to change the default sorting order of datasets and jobs when you open them. [#3369](https://github.com/zowe/zowe-explorer-vscode/pull/3369)
+
+### Bug fixes
+
+- Fixed an issue during initialization where the error dialog shown for a broken team configuration file was missing the "Show Config" action. [#3322](https://github.com/zowe/zowe-explorer-vscode/pull/3322)
+- Fixed an issue where editing a team config file or updating secrets in the OS credential vault could trigger multiple events for a single action. [#3296](https://github.com/zowe/zowe-explorer-vscode/pull/3296)
+- Fixed an issue where opening a PDS member after renaming an expanded PDS resulted in an error. [#3314](https://github.com/zowe/zowe-explorer-vscode/issues/3314)
+- Fixed issue where persistent settings defined at the workspace level were migrated into global storage rather than workspace-specific storage. [#3180](https://github.com/zowe/zowe-explorer-vscode/issues/3180)
+- Fixed an issue where renaming a data set with unsaved changes did not cancel the rename operation. Now, when renaming a data set with unsaved changes, you are prompted to resolve them before continuing. [#3326](https://github.com/zowe/zowe-explorer-vscode/pull/3326)
+- Fixed an issue where a migrated data set is unusable after it is recalled through Zowe Explorer. [#3294](https://github.com/zowe/zowe-explorer-vscode/issues/3294)
+- Fixed an issue where a recalled PDS is expandable after it is migrated through Zowe Explorer. [#3294](https://github.com/zowe/zowe-explorer-vscode/issues/3294)
+- Fixed an issue where data set nodes did not update if migrated or recalled outside of Zowe Explorer. [#3294](https://github.com/zowe/zowe-explorer-vscode/issues/3294)
+- Fixed an issue where listing data sets resulted in an error after opening a data set with an encoding. [#3347](https://github.com/zowe/zowe-explorer-vscode/issues/3347)
+- Fixed an issue where binary USS files were not fetched using the "Pull from Mainframe" context menu option. [#3355](https://github.com/zowe/zowe-explorer-vscode/issues/3355)
+- Fixed an issue where cached encoding was applied for all profiles with the same data set or USS path in the "Open with Encoding" menu. [#3363](https://github.com/zowe/zowe-explorer-vscode/pull/3363)
+- Removed "Delete Profile" action from the "Manage Profile" menu since this action is currently not supported in Zowe Explorer. [#3037](https://github.com/zowe/zowe-explorer-vscode/issues/3037)
+- Fixed an issue where the filesystem continued to use a profile with invalid credentials to fetch resources. Now, after an authentication error occurs for a profile, it cannot be used again in the filesystem until the authentication error is resolved. [#3329](https://github.com/zowe/zowe-explorer-vscode/issues/3329)
+- Fixed data loss when creating a data set member with the same name as an existing member. When creating a new member, the user is now prompted to replace it if the member already exists. [[#3327](https://github.com/zowe/zowe-explorer-vscode/issues/3327)]
+- Resolved user interface bug with tables that caused an inconsistent table height within the VS Code Panel. [#3389](https://github.com/zowe/zowe-explorer-vscode/pull/3389)
+- Fixed an issue where opening a data set with the same starting pattern as an archived data set caused a REST API error (code 500) to appear in the editor. [#3407](https://github.com/zowe/zowe-explorer-vscode/pull/3407)
+- Fixed an issue where registering new profile types from a Zowe Explorer extender could cause an internal API error on startup. [#3412](https://github.com/zowe/zowe-explorer-vscode/pull/3412)
+
+## `3.0.3`
+
+### Bug fixes
+
+- `DatasetFSProvider.stat()` will now throw a `FileNotFound` error for extenders trying to fetch an MVS resource that does not exist. [#3252](https://github.com/zowe/zowe-explorer-vscode/issues/3252)
+- Fixed an issue where renaming or deleting a USS file or data set did not update the opened editor. [#3260](https://github.com/zowe/zowe-explorer-vscode/issues/3260)
+- Fixed an issue during initialization where a broken team configuration file caused the "Show Config" action in the error dialog to stop working. [#3273](https://github.com/zowe/zowe-explorer-vscode/issues/3273)
+- Fixed issue where switching the authentication methods would cause `Cannot read properties of undefined` error. [#3142](https://github.com/zowe/zowe-explorer-vscode/issues/3142)
+- Fixed an issue where calling `vscode.workspace.fs.readFile` with a PDS member URI would throw an error when the PDS already existed as a filesystem entry. [#3267](https://github.com/zowe/zowe-explorer-vscode/issues/3267)
+- Fixed issue where Zowe Explorer would present the "No configs detected" notification when initialized in a workspace without a Zowe team configuration. [#3280](https://github.com/zowe/zowe-explorer-vscode/issues/3280)
+- Reduced the number of MVS API calls performed by `vscode.workspace.fs.readFile` when fetching the contents of a data set entry. [#3278](https://github.com/zowe/zowe-explorer-vscode/issues/3278)
+- Fixed an issue to review inconsistent capitalization across translation strings. [#2935](https://github.com/zowe/zowe-explorer-vscode/issues/2935)
+- Updated the test for the default credential manager for better compatibility with Cloud-based platforms such as Eclipse Che and Red Hat OpenShift Dev Spaces. [#3297](https://github.com/zowe/zowe-explorer-vscode/pull/3297)
+- Fixed issue where users were not prompted to enter credentials if a 401 error was encountered when opening files, data sets or spools in the editor. [#3197](https://github.com/zowe/zowe-explorer-vscode/issues/3197)
+- Fixed issue where profile credential updates or token changes were not reflected within the filesystem. [#3289](https://github.com/zowe/zowe-explorer-vscode/issues/3289)
+- Fixed issue to update the success message when changing authentication from token to basic through the 'Change Authentication' option. [#3316](https://github.com/zowe/zowe-explorer-vscode/pull/3316)
+- Fixed an issue where fetching a USS file using `UssFSProvider.stat()` with a `fetch=true` query would cause Zowe Explorer to get stuck in an infinite loop. [#3321](https://github.com/zowe/zowe-explorer-vscode/pull/3321)
+
+## `3.0.2`
+
+### New features and enhancements
+
+- Zowe Explorer now includes support for the [VS Code display languages](https://code.visualstudio.com/docs/getstarted/locales) French, German, Japanese, Portuguese, and Spanish. Download the respective language pack and switch. [#3239](https://github.com/zowe/zowe-explorer-vscode/pull/3239)
+- Localization of strings within Zowe Explorer webviews. [#2983](https://github.com/zowe/zowe-explorer-vscode/issues/2983)
+
+### Bug fixes
+
+- Fixed an issue where the contents of an editor did not update when polling spool content or using the "Pull from Mainframe" action with jobs. [#3249](https://github.com/zowe/zowe-explorer-vscode/pull/3249)
+- Fixed an issue where Zowe Explorer sometimes prompted the user to convert V1 profiles when changes were made to a team configuration after initialization. [#3246](https://github.com/zowe/zowe-explorer-vscode/pull/3246)
+- Fixed an issue where the encoding of a USS file was not automatically detected when opened for the first time. [#3253](https://github.com/zowe/zowe-explorer-vscode/pull/3253)
+
+## `3.0.1`
+
+### Bug fixes
+
+- Fixed an issue where opening sequential data sets within favorited searches resulted in an error. [#3163](https://github.com/zowe/zowe-explorer-vscode/pull/3163)
+- Fixed an issue where automatic file extension detection identified file types incorrectly. [#3181](https://github.com/zowe/zowe-explorer-vscode/pull/3181)
+- Fixed an issue where Zowe Explorer displayed a "No Zowe client configurations" prompt when a project user configuration existed but no global configuration was present. [#3168](https://github.com/zowe/zowe-explorer-vscode/issues/3168)
+- Fixed an issue where the `ProfilesUtils.getProfileInfo` function returned a new `ProfileInfo` instance that ignored the `ZOWE_CLI_HOME` environment variable and workspace paths. [#3168](https://github.com/zowe/zowe-explorer-vscode/issues/3168)
+- Fixed an issue where the location prompt for the `Create Directory` and `Create File` USS features would appear even when a path is already set for the profile or parent folder. [#3183](https://github.com/zowe/zowe-explorer-vscode/pull/3183)
+- Fixed an issue where the `Create Directory` and `Create File` features would continue processing when the first prompt was dismissed, causing an incorrect URI to be generated. [#3183](https://github.com/zowe/zowe-explorer-vscode/pull/3183)
+- Fixed an issue where the `Create Directory` and `Create File` features would incorrectly handle user-specified locations with trailing slashes. [#3183](https://github.com/zowe/zowe-explorer-vscode/pull/3183)
+- Fixed an issue where a 401 error could occur when opening PDS members after updating credentials within the same user session. [#3150](https://github.com/zowe/zowe-explorer-vscode/issues/3150)
+- Fixed the "Edit Profile" operation to open the correct files when both global and project team configs are present. [#3125](https://github.com/zowe/zowe-explorer-vscode/issues/3125)
+
+## `3.0.0`
+
+### New features and enhancements
+
+- Support VS Code engine 1.79.0 and higher.
+- Updated activation event to `onStartupFinished`. [#1910](https://github.com/zowe/vscode-extension-for-zowe/issues/1910)
+- Removal of Zowe V1 profile support. [#2072](https://github.com/zowe/vscode-extension-for-zowe/issues/2072)
+- Removal of Theia support. [#2647](https://github.com/zowe/vscode-extension-for-zowe/issues/2647)
+- Migrate package manager from Yarn to PNPM. [#2424](https://github.com/zowe/zowe-explorer-vscode/pull/2424)
+- Migrated to webpack V5 [#2214](https://github.com/zowe/vscode-extension-for-zowe/issues/2214)
+- Migrated from `@zowe/cli` dependency package to individual Zowe `8.0.0` SDK packages for Zowe V3 support. [#2719](https://github.com/zowe/vscode-extension-for-zowe/issues/2719)
+- Updated Zowe Explorer API dependency to `3.0.0` for Zowe V3 support. Check the [list](https://github.com/zowe/zowe-explorer-vscode/wiki/v3-Changes-for-Users-and-Extenders) of APIs that were removed.
+- Removed deprecated methods and conoslidated VS Code commands. Check the [list](https://github.com/zowe/zowe-explorer-vscode/wiki/v3-Changes-for-Users-and-Extenders) of APIs that were removed.
+- Added `madge` dependency to support to track circular dependencies. [#2148](https://github.com/zowe/vscode-extension-for-zowe/issues/2148)
+- Migrated from `i18n` to `l10n` for VS Code localization. [#2253](https://github.com/zowe/vscode-extension-for-zowe/issues/2253)
+- Replaced `lodash` dependency with `es-toolkit` to reduce webview bundle size and add technical currency. [#3060](https://github.com/zowe/zowe-explorer-vscode/pull/3060)
+- Replaced `ts-loader` dependency with `esbuild-loader` to improve build speed for developers. [#2909](https://github.com/zowe/zowe-explorer-vscode/pull/2909)
+- Minimized activation function for Zowe Explorer to load only necessary items on activation. [#1985](https://github.com/zowe/vscode-extension-for-zowe/issues/1985)
+- **Breaking:** Zowe Explorer no longer uses a temporary directory for storing Data Sets and USS files. All settings related to the temporary downloads folder have been removed. In order to access resources stored by Zowe Explorer V3, refer to the [FileSystemProvider documentation](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for information on how to build and access resource URIs. Extenders can detect changes to resources using the `onResourceChanged` function in the `ZoweExplorerApiRegister` class. [#2951](https://github.com/zowe/zowe-explorer-vscode/issues/2951)
+- **Breaking** Moved data set templates out of data set history settings into new setting `zowe.ds.templates`. [#2345](https://github.com/zowe/zowe-explorer-vscode/issues/2345)
+- Added UI migration steps on startup for users with V1 profiles to either convert existing V1 profiles to team configuration file or create a new team configuration file. [#2284](https://github.com/zowe/vscode-extension-for-zowe/issues/2284)
+- Added support for Local Storage settings for persistent settings in Zowe Explorer [#2208](https://github.com/zowe/vscode-extension-for-zowe/issues/2208)
+- Grouped Common methods into Singleton classes. [#2109](https://github.com/zowe/zowe-explorer-vscode/issues/2109)
+- **New** Extender registration APIs:
+  - `onVaultUpdate` VS Code events to notify extenders when credentials are updated on the OS vault by other applications. [#2994](https://github.com/zowe/zowe-explorer-vscode/pull/2994)
+  - `onCredMgrUpdate` VS Code events to notify extenders when the local PC's credential manager has been updated by other applications. [#2994](https://github.com/zowe/zowe-explorer-vscode/pull/2994)
+  - `onResourceChanged` function to the `ZoweExplorerApiRegister` class to allow extenders to subscribe to any changes to Zowe resources (data sets, USS files/folders, jobs, etc.). See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for more information on Zowe resources.
+  - `addFileSystemEvent` function to the `ZoweExplorerApiRegister` class to allow extenders to register their FileSystemProvider `onDidChangeFile` events.
+- Implemented support for building, exposing, and displaying table views within Zowe Explorer. Tables can be customized and exposed using the helper facilities (`TableBuilder` and `TableMediator`) for an extender's specific use case. For more information on how to configure and show tables, please refer to the [wiki article on Table Views](https://github.com/zowe/zowe-explorer-vscode/wiki/Table-Views). [#2258](https://github.com/zowe/zowe-explorer-vscode/issues/2258)
+- Added support for logging in to multiple API ML instances per team configuration file. [#2264](https://github.com/zowe/zowe-explorer-vscode/issues/2264)
+- Added remote lookup functionality for data sets and USS, allowing Zowe Explorer to locate and resolve mainframe resources on demand. [#3040](https://github.com/zowe/zowe-explorer-vscode/pull/3040)
+- Implemented change detection in the data sets and USS filesystems so that changes on the mainframe are reflected in opened editors for Data Sets and USS files. [#3040](https://github.com/zowe/zowe-explorer-vscode/pull/3040)
+- Implemented a "Show as Table" option for profile nodes in the Jobs tree, displaying lists of jobs in a tabular view. Jobs can be filtered and sorted within this view, and users can select jobs to cancel, delete, or download. [#2258](https://github.com/zowe/zowe-explorer-vscode/issues/2258)
+- Implemented the VS Code FileSystemProvider for the Data Sets, Jobs, and USS trees to handle all read/write actions as well as conflict resolution. [#2207](https://github.com/zowe/zowe-explorer-vscode/issues/2207)
+  See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for more information on the FileSystemProvider.
+  - Refactored behavior and management of Favorites in Zowe Explorer. [#2026](https://github.com/zowe/zowe-explorer-vscode/issues/2026)
+- Added the capability for extenders to contribute new profile types to the Zowe schema during extender activation. [#2508](https://github.com/zowe/vscode-extension-for-zowe/issues/2508)
+- Added a new command feature, Issue UNIX Commands available in the VS Code command pallete or via right-click action in the USS treeview. [#1326](https://github.com/zowe/vscode-extension-for-zowe/issues/1326)
+- Added enhancement to compare 2 files from MVS and/or UNIX System Services views via right click actions, with option to compare in Read-Only mode too.
+- Added a prompt to create a new Zowe client configuration for an environment that does not have any Zowe client configurations. [#3148](https://github.com/zowe/zowe-explorer-vscode/pull/3148)
+- Implemented support for favoriting a data set search that contains member wildcards. [#1164](https://github.com/zowe/zowe-explorer-vscode/issues/1164)
+- Changed default base profile naming scheme in newly generated configuration files to prevent name and property conflicts between Global and Project profiles [#2682](https://github.com/zowe/zowe-explorer-vscode/issues/2682)
+- Renamed `isHomeProfile` context helper function to `isGlobalProfile` for clarity. [#2026](https://github.com/zowe/zowe-explorer-vscode/issues/2026)
+- Set up [POEditor project](https://poeditor.com/join/project/Siy3KCNFKk) for contributing translations and cleaned up redundant localization strings. [#546](https://github.com/zowe/zowe-explorer-vscode/issues/546)
+- Added integration and end-to-end test framework to verify extension behavior and catch issues during Zowe Explorer development. [#2322](https://github.com/zowe/zowe-explorer-vscode/issues/2322)
+
+### Bug fixes
+
+- The "Zowe Resources" panel is now hidden by default until Zowe Explorer reveals it to display a table or other data. [#3113](https://github.com/zowe/zowe-explorer-vscode/issues/3113)
+- Fixed behavior of logout action when token is defined in both base profile and parent profile. [#3076](https://github.com/zowe/zowe-explorer-vscode/issues/3076)
+- Fixed bug that displayed obsolete profiles in the Zowe Explorer tree views after the associated team configuration file was deleted. [#3124](https://github.com/zowe/zowe-explorer-vscode/issues/3124)
+- Removal of broken VSC command to `Zowe Explorer: Refresh Zowe Explorer`, use VS Code's `Extensions: Refresh` command instead. [#3100](https://github.com/zowe/zowe-explorer-vscode/issues/3100)
+- Fixed issue where "Allocate Like" input box placeholder was showing a localization ID instead of the intended message ("Enter a name for the new data set"). [#2759](https://github.com/zowe/vscode-extension-for-zowe/issues/2759)
+- Fixed default behavior of "Create a new Team Configuration File" to create a Project Config instead of Project User Config. [#2684](https://github.com/zowe/vscode-extension-for-zowe/issues/2684)
+- Changed ZoweExplorerExtender.initForZowe `profileTypeConfigurations: imperative.ICommandProfileTypeConfiguration[]` to a required argument to address issues seen after registration of profile type when not passed. [#2575](https://github.com/zowe/vscode-extension-for-zowe/issues/2575)
+- Resolved `TypeError: Cannot read properties of undefined (reading 'direction')` error for favorited items. [#3067](https://github.com/zowe/zowe-explorer-vscode/pull/3067)
+- Fixed issue where switching from token-based authentication to user/password would cause an error for nested profiles. [#3142](https://github.com/zowe/zowe-explorer-vscode/issues/3142)
+
+## `3.0.0-next.202409251932`
+
+### New features and enhancements
+
+- Users can now follow a prompt to create a new Zowe client configuration. The prompt displays when VS Code is opened with Zowe Explorer installed, but the user does not have any Zowe client configurations. [#3148](https://github.com/zowe/zowe-explorer-vscode/pull/3148)
+
+### Bug fixes
+
+- The "Zowe Resources" panel is now hidden by default until Zowe Explorer reveals it to display a table or other data. [#3113](https://github.com/zowe/zowe-explorer-vscode/issues/3113)
+- Fixed behavior of logout action when token is defined in both base profile and parent profile. [#3076](https://github.com/zowe/zowe-explorer-vscode/issues/3076)
+- Fixed bug that displayed obsolete profiles in the Zowe Explorer tree views after the associated team configuration file was deleted. [#3124](https://github.com/zowe/zowe-explorer-vscode/issues/3124)
+- Fix issue with extender profiles not being included in fresh team configuration file. [#3122](https://github.com/zowe/zowe-explorer-vscode/issues/3122)
+- Fixed issue where file extensions were removed from data sets, causing language detection to sometimes fail for Zowe Explorer extenders. [#3121](https://github.com/zowe/zowe-explorer-vscode/issues/3121)
+- Fixed an issue where copying and pasting a file/folder in the USS tree would fail abruptly, displaying an error. [#3128](https://github.com/zowe/zowe-explorer-vscode/issues/3128)
+- Removal of broken VSC command to `Zowe Explorer: Refresh Zowe Explorer`, use VS Code's `Extensions: Refresh` command instead. [#3100](https://github.com/zowe/zowe-explorer-vscode/issues/3100)
+- Update Zowe SDKs to `8.0.0` for technical currency. [#3146](https://github.com/zowe/zowe-explorer-vscode/issues/3146)
+- Fixed issue where Zowe Explorer would reload the VS Code window during initialization when no config files are present. [#3147](https://github.com/zowe/zowe-explorer-vscode/issues/3147)
+- Fixed issue where obsolete credentials persisted for PDS member nodes in Data Sets tree. [#3112](https://github.com/zowe/zowe-explorer-vscode/issues/3112)
+- Fixed issue where Search operation did not prompt for credentials if profile contains expired token. [#2259](https://github.com/zowe/zowe-explorer-vscode/issues/2259)
+- Fixed issue where inactive status was not displayed for profiles loaded from Global Config. [#3134](https://github.com/zowe/zowe-explorer-vscode/issues/3134)
+
+## `3.0.0-next.202409132122`
+
+### New features and enhancements
+
+- Implemented support for favoriting a data set search that contains member wildcards. [#1164](https://github.com/zowe/zowe-explorer-vscode/issues/1164)
+- Resolved `TypeError: Cannot read properties of undefined (reading 'direction')` error for favorited items. [#3067](https://github.com/zowe/zowe-explorer-vscode/pull/3067)
+
+### Bug fixes
+
+- Fix issue with outdated SSH credentials stored securely in the SSH profile causing errors. [#2901](https://github.com/zowe/zowe-explorer-vscode/issues/2901)
+
+## `3.0.0-next.202409091409`
+
+### Bug fixes
+
+- Update Zowe SDKs to `8.0.0-next.202408301809` for technical currency.
+
+## `3.0.0-next.202408301858`
+
+### New features and enhancements
+
+- Refactored behavior and management of Favorites in Zowe Explorer. [#2026](https://github.com/zowe/zowe-explorer-vscode/issues/2026)
+- Renamed `isHomeProfile` context helper function to `isGlobalProfile` for clarity. [#2026](https://github.com/zowe/zowe-explorer-vscode/issues/2026)
+- Set up [POEditor project](https://poeditor.com/join/project/Siy3KCNFKk) for contributing translations and cleaned up redundant localization strings. [#546](https://github.com/zowe/zowe-explorer-vscode/issues/546)
+- Replaced `ts-loader` with `esbuild-loader` to improve build speed for developers. [#2909](https://github.com/zowe/zowe-explorer-vscode/pull/2909)
+- Grouped Common methods into Singleton classes. [#2109](https://github.com/zowe/zowe-explorer-vscode/issues/2109)
+- **BREAKING** Moved data set templates out of data set history settings into new setting "zowe.ds.templates". [#2345](https://github.com/zowe/zowe-explorer-vscode/issues/2345)
+- Ported the following enhancements from v2:
+  - Added a "Copy Relative Path" context option for USS files and directories in the tree view. [#2908](https://github.com/zowe/zowe-explorer-vscode/pull/2908)
+  - Added a "Copy Name" context option for data sets, jobs and spool files in the tree view. [#2908](https://github.com/zowe/zowe-explorer-vscode/pull/2908)
+- Added integration and end-to-end test framework to verify extension behavior and catch issues during Zowe Explorer development. [#2322](https://github.com/zowe/zowe-explorer-vscode/issues/2322)
+- **Breaking:** Removed deprecated methods: [#2238](https://github.com/zowe/zowe-explorer-vscode/issues/2238)
+  - `DatasetActions.copyDataSet` - use `DatasetActions.copyDataSets` instead
+  - `USSActions.pasteUssFile` - use `DatasetActions.pasteUss` instead
+  - `ZoweUSSNode.refreshAndReopen` - use `ZoweUSSNode.reopen` instead
+- Add deprecation message to history settings explaining to users how to edit items. [#2303](https://github.com/zowe/zowe-explorer-vscode/issues/2303)
+- **Breaking:** Consolidated VS Code commands:
+  - `zowe.ds.addFavorite`, `zowe.uss.addFavorite`, `zowe.jobs.addFavorite` - use `zowe.addFavorite` instead
+  - `zowe.ds.disableValidation`, `zowe.uss.disableValidation`, `zowe.jobs.disableValidation` - use `zowe.disableValidation` instead
+  - `zowe.ds.deleteProfile`, `zowe.uss.deleteProfile`, `zowe.jobs.deleteProfile`, `zowe.cmd.deleteProfile` - use `zowe.deleteProfile` instead
+  - `zowe.ds.editSession`, `zowe.uss.editSession`, `zowe.jobs.editSession` - use `zowe.editSession` instead
+  - `zowe.ds.enableValidation`, `zowe.uss.enableValidation`, `zowe.jobs.enableValidation` - use `zowe.enableValidation` instead
+  - `zowe.ds.openWithEncoding`, `zowe.uss.openWithEncoding` - use `zowe.openWithEncoding` instead
+  - `zowe.ds.removeFavorite`, `zowe.uss.removeFavorite`, `zowe.jobs.removeFavorite` - use `zowe.removeFavorite` instead
+  - `zowe.ds.removeFavProfile`, `zowe.uss.removeFavProfile`, `zowe.jobs.removeFavProfile` - use `zowe.removeFavProfile` instead
+  - `zowe.ds.removeSavedSearch`, `zowe.uss.removeSavedSearch`, `zowe.jobs.removeSearchFavorite` - use `zowe.removeFavorite` instead
+  - `zowe.ds.removeSession`, `zowe.uss.removeSession`, `zowe.jobs.removeSession` - use `zowe.removeSession` instead
+  - `zowe.ds.saveSearch`, `zowe.uss.saveSearch`, `zowe.jobs.saveSearch` - use `zowe.saveSearch` instead
+  - `zowe.ds.ssoLogin`, `zowe.uss.ssoLogin`, `zowe.jobs.ssoLogin` - use `zowe.ssoLogin` instead
+  - `zowe.ds.ssoLogout`, `zowe.uss.ssoLogout`, `zowe.jobs.ssoLogout` - use `zowe.ssoLogout` instead
+- Added support for `consoleName` property in z/OSMF profiles when issuing MVS commands [#1667](https://github.com/zowe/vscode-extension-for-zowe/issues/1667)
+- Updated sorting of PDS members to show items without stats at bottom of list [#2660](https://github.com/zowe/vscode-extension-for-zowe/issues/2660)
+- Added PEM certificate support as an authentication method for logging into the API ML. [#2621](https://github.com/zowe/zowe-explorer-vscode/issues/2621)
+- Added support to view the Encoding history for MVS and Dataset in the History View. [#2776](https://github.com/zowe/vscode-extension-for-zowe/issues/2776)
+- Added error handling for when the default credential manager is unable to initialize. [#2811](https://github.com/zowe/zowe-explorer-vscode/issues/2811)
+- **Breaking:** Zowe Explorer no longer uses a temporary directory for storing Data Sets and USS files. All settings related to the temporary downloads folder have been removed. In order to access resources stored by Zowe Explorer v3, refer to the [FileSystemProvider documentation](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for information on how to build and access resource URIs. Extenders can detect changes to resources using the `onResourceChanged` function in the `ZoweExplorerApiRegister` class. [#2951](https://github.com/zowe/zowe-explorer-vscode/issues/2951)
+- Implemented the `onVaultUpdate` VS Code events to notify extenders when credentials are updated on the OS vault by other applications. [#2994](https://github.com/zowe/zowe-explorer-vscode/pull/2994)
+- Changed default base profile naming scheme in newly generated configuration files to prevent name and property conflicts between Global and Project profiles [#2682](https://github.com/zowe/zowe-explorer-vscode/issues/2682)
+- Implemented the `onCredMgrUpdate` VS Code events to notify extenders when the local PC's credential manager has been updated by other applications. [#2994](https://github.com/zowe/zowe-explorer-vscode/pull/2994)
+- Implemented support for building, exposing and displaying table views within Zowe Explorer. Tables can be customized and exposed using the helper facilities (`TableBuilder` and `TableMediator`) for an extender's specific use case. For more information on how to configure and show tables, please refer to the [wiki article on Table Views](https://github.com/zowe/zowe-explorer-vscode/wiki/Table-Views). [#2258](https://github.com/zowe/zowe-explorer-vscode/issues/2258)
+- Added support for logging in to multiple API ML instances per team config file. [#2264](https://github.com/zowe/zowe-explorer-vscode/issues/2264)
+- Added remote lookup functionality for Data Sets and USS, allowing Zowe Explorer to locate and resolve mainframe resources on demand. [#3040](https://github.com/zowe/zowe-explorer-vscode/pull/3040)
+- Implemented change detection in the Data Sets and USS filesystems, so that changes on the mainframe will be reflected in opened editors for Data Sets and USS files. [#3040](https://github.com/zowe/zowe-explorer-vscode/pull/3040)
+- Implemented a "Show as Table" option for profile nodes in the Jobs tree, displaying lists of jobs in a tabular view. Jobs can be filtered and sorted within this view, and users can select jobs to cancel, delete or download. [#2258](https://github.com/zowe/zowe-explorer-vscode/issues/2258)
+- Replaced `lodash` dependency with `es-toolkit` to reduce webview bundle size and add technical currency. [#3060](https://github.com/zowe/zowe-explorer-vscode/pull/3060)
+
+### Bug fixes
+
+- Fixed vNext-only issue where users are not able to create data sets. [#2783](https://github.com/zowe/vscode-extension-for-zowe/pull/2783).
+- Omitted the following Zowe Explorer commands from the Command Palette that do not execute properly when run as a standalone command:
+  - `Zowe Explorer: Cancel job`
+  - `Zowe Explorer: Filter jobs`
+  - `Zowe Explorer: Filter PDS members`
+  - `Zowe Explorer: Sort jobs`
+  - `Zowe Explorer: Sort PDS members`
+  - `Zowe Explorer: Start Polling`
+  - `Zowe Explorer: Stop Polling`
+- Ported the following fixes from v2:
+  - Moved schema warnings into the log file (rather than a UI message) to minimize end-user disruption. [#2860](https://github.com/zowe/zowe-explorer-vscode/pull/2860)
+- Fix issue with base profile not being included in fresh team configuration file. [#2887](https://github.com/zowe/zowe-explorer-vscode/issues/2887)
+- Fixed an issue where the `onProfilesUpdate` event did not fire after secure credentials were updated. [#2822](https://github.com/zowe/zowe-explorer-vscode/issues/2822)
+- Fixed issue where saving changes to favorited PDS member fails when custom temp folder is set on Windows. [#2880](https://github.com/zowe/zowe-explorer-vscode/issues/2880)
+- Fixed issue where multiple extensions that contribute profiles to a tree view using the Zowe Explorer API may fail to load. [#2888](https://github.com/zowe/zowe-explorer-vscode/issues/2888)
+- Fixed regression where `getProviderForNode` returned the wrong tree provider after performing an action on a Zowe tree node, causing some commands to fail silently. [#2967](https://github.com/zowe/zowe-explorer-vscode/issues/2967)
+- Fixed issue where creating a new team configuration file could cause Zowe Explorer to crash, resulting in all sessions disappearing from trees. [#2906](https://github.com/zowe/zowe-explorer-vscode/issues/2906)
+- Addressed breaking changes from the Zowe Explorer API package.[#2952](https://github.com/zowe/zowe-explorer-vscode/issues/2952)
+- Fixed data set not opening when the token has expired. [#3001](https://github.com/zowe/zowe-explorer-vscode/issues/3001)
+- Fixed an issue where upgrading from Zowe Explorer v1 and selecting "Reload Extensions" causes Zowe Explorer v3 to fail during initialization. [#3051](https://github.com/zowe/zowe-explorer-vscode/pull/3051)
+- Fixed an issue where remote lookup functionality caused the local side of a conflict to be overwritten with the remote contents. [#3085](https://github.com/zowe/zowe-explorer-vscode/pull/3085)
+- Fixed an issue where the remote conflict icons showed when using the "Compare with Selected" feature. [#3085](https://github.com/zowe/zowe-explorer-vscode/pull/3085)
+- Resolved an issue where extender event callbacks were not always fired when the team configuration file was created, updated or deleted. [#3078](https://github.com/zowe/zowe-explorer-vscode/issues/3078)
+- Update Zowe SDKs to `8.0.0-next.202408291544` for technical currency. [#3057](https://github.com/zowe/zowe-explorer-vscode/pull/3057)
+- Fix issue with UnixCommand prompting for credentials. [#2762](https://github.com/zowe/zowe-explorer-vscode/issues/2762)
+- Fixed issue where listing data sets or USS files would cause a drastic increase in API calls, causing delays or a complete halt in Zowe Explorer. [#3093](https://github.com/zowe/zowe-explorer-vscode/pull/3093)
+
+## `3.0.0-next.202404242037`
+
+### New features and enhancements
+
+- Implemented the FileSystemProvider for the Data Sets, Jobs and USS trees to handle all read/write actions as well as conflict resolution. [#2207](https://github.com/zowe/zowe-explorer-vscode/issues/2207)
+- **Breaking:** Removed the `zowe.jobs.zosJobsOpenSpool` command in favor of using `vscode.open` with a spool URI. See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider#file-paths-vs-uris) for more information on spool URIs. [#2207](https://github.com/zowe/zowe-explorer-vscode/issues/2207)
+- **Breaking:** Removed the `zowe.ds.ZoweNode.openPS` command in favor of using `vscode.open` with a data set URI. See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider#file-paths-vs-uris) for more information on data set URIs. [#2207](https://github.com/zowe/zowe-explorer-vscode/issues/2207)
+- **Breaking:** Removed the `zowe.uss.ZoweUSSNode.open` command in favor of using `vscode.open` with a USS URI. See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider#file-paths-vs-uris) for more information on USS URIs. [#2207](https://github.com/zowe/zowe-explorer-vscode/issues/2207)
+- Added the `onResourceChanged` function to the `ZoweExplorerApiRegister` class to allow extenders to subscribe to any changes to Zowe resources (Data Sets, USS files/folders, Jobs, etc.). See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for more information on Zowe resources.
+- Added the `addFileSystemEvent` function to the `ZoweExplorerApiRegister` class to allow extenders to register their FileSystemProvider "onDidChangeFile" events. See the [FileSystemProvider wiki page](https://github.com/zowe/zowe-explorer-vscode/wiki/FileSystemProvider) for more information on the FileSystemProvider.
+
+### Bug fixes
+
+- Fixed issue where "Allocate Like" input box placeholder was showing a localization ID instead of the intended message ("Enter a name for the new data set"). [#2759](https://github.com/zowe/vscode-extension-for-zowe/issues/2759)
+- Fix concerns regarding Unix command handling work. [#2866](https://github.com/zowe/zowe-explorer-vscode/pull/2866)
+
+## `3.0.0-next.202403051607`
+
+### New features and enhancements
+
+- Implemented sorting of PDS members by date created [#2565](https://github.com/zowe/vscode-extension-for-zowe/pull/2565)
+- Added the capability for extenders to contribute new profile types to the Zowe schema during extender activation. [#2508](https://github.com/zowe/vscode-extension-for-zowe/issues/2508)
+- Migrated from `@zowe/cli` package to individual Zowe SDK packages. [#2719](https://github.com/zowe/vscode-extension-for-zowe/issues/2719)
+
+### Bug fixes
+
+- Fixed default behavior of "Create a new Team Configuration File" to create a Project Config instead of Project User Config. [#2684](https://github.com/zowe/vscode-extension-for-zowe/issues/2684)
+- Adjusted order of 'Manage Profile' and 'Edit History' in the jobs tree's context menu to match the other trees. [#2670](https://github.com/zowe/vscode-extension-for-zowe/issues/2670)
+- Updated the SDK dependencies to `8.0.0-next.202403041352` for technical currency [#2754](https://github.com/zowe/vscode-extension-for-zowe/pull/2754).
+
+## `3.0.0-next.202402142205`
+
+### New features and enhancements
+
+- **Breaking:** Removed `zowe.uss.binary` and `zowe.uss.text` commands. Use `zowe.uss.openWithEncoding` instead.
+- Added UI migration steps on startup for users with v1 profiles to either convert existing v1 profiles to team configuration file or create a new team configuration file. [#2284](https://github.com/zowe/vscode-extension-for-zowe/issues/2284)
+- Removal of Theia support. [#2647](https://github.com/zowe/vscode-extension-for-zowe/issues/2647)
+
+### Bug fixes
+
+- Updated dependencies for technical currency purposes.
+- Fixed issue where spools with duplicate DD names would overwrite each other causing less spools in job output view [#2315](https://github.com/zowe/vscode-extension-for-zowe/issues/2315)
+
+## `3.0.0-next.202402071248`
+
+### New features and enhancements
+
+- Adapted to new API changes from grouping of common methods into singleton classes [#2109](https://github.com/zowe/vscode-extension-for-zowe/issues/2109)
+- Migrated to webpack v5 [#2214](https://github.com/zowe/vscode-extension-for-zowe/issues/2214)
+
+## `3.0.0-next.202401241448`
+
+### New features and enhancements
+
+- Removed Gulp dependency and migrated from `i18n` standard to `l10n`. [#2253](https://github.com/zowe/vscode-extension-for-zowe/issues/2253)
+
+### Bug fixes
+
+- Changed ZoweExplorerExtender.initForZowe `profileTypeConfigurations: imperative.ICommandProfileTypeConfiguration[]` to a required argument to address issues seen after registration of profile type when not passed. [#2575](https://github.com/zowe/vscode-extension-for-zowe/issues/2575)
+
+## `3.0.0-next.202401121747`
+
+### New features and enhancements
+
+- Added the Issue UNIX Commands feature. [#1326](https://github.com/zowe/vscode-extension-for-zowe/issues/1326)
+- Minimized activation function for Zowe Explorer to load only necessary items on activation. [#1985](https://github.com/zowe/vscode-extension-for-zowe/issues/1985)
+- Added back local storage for Zowe Explorer persistent items
+
+### Bug fixes
+
+- Update dependencies for technical currency purposes.
+
+## `3.0.0-next.202311171754`
+
+## `3.0.0-next.202311171523`
+
+### New features and enhancements
+
+- Migrate from Yarn to PNPM.
+- Update dependencies for technical currency purposes
+- Support VS Code engine 1.79.0 and higher.
+- Ability to compare 2 files from MVS and/or UNIX System Services views via right click actions, with option to compare in Read-Only mode too.
+
+## `3.0.0-next.202309121526`
+
+### New features and enhancements
+
+- Removal of v1 profile support. [#2072](https://github.com/zowe/vscode-extension-for-zowe/issues/2072)
+- Removal of support for Zowe Explorer APIs that have been removed. Check the [list](https://github.com/zowe/vscode-extension-for-zowe/tree/next/docs/early-access/v3/Extenders.md) of APIs that were removed.
+- Added support for Local Storage settings for persistent settings in Zowe Explorer [#2208](https://github.com/zowe/vscode-extension-for-zowe/issues/2208)
+- Updated activation event to `onStartupFinished`. [#1910](https://github.com/zowe/vscode-extension-for-zowe/issues/1910)
+- Added `madge` script in `package.json` to track circular dependencies. [#2148](https://github.com/zowe/vscode-extension-for-zowe/issues/2148)
+- Migrated to new package manager PNPM from Yarn.
+
+## `2.18.0`
+
+### New features and enhancements
+
+- Added new Zowe Explorer z/OS Console webview with access via VS Code command pallete to issue MVS Console commands. [#2925](https://github.com/zowe/zowe-explorer-vscode/pull/2925)
+
+### Bug fixes
+
+- Fixed issue where creating a new team configuration file could cause Zowe Explorer to crash, resulting in all sessions disappearing from trees. [#2906](https://github.com/zowe/zowe-explorer-vscode/issues/2906)
+- Fixed data set not opening when the token has expired. [#3001](https://github.com/zowe/zowe-explorer-vscode/issues/3001)
+- Fixed JSON errors being ignored when `zowe.config.json` files change on disk and are reloaded. [#3066](https://github.com/zowe/zowe-explorer-vscode/issues/3066) [#3074](https://github.com/zowe/zowe-explorer-vscode/issues/3074)
+- Resolved an issue where extender event callbacks were not always fired when the team configuration file was created, updated or deleted. [#3078](https://github.com/zowe/zowe-explorer-vscode/issues/3078)
+
+## `2.17.0`
+
+### New features and enhancements
+
+- To add the ability to open a Favorited Job Search under Favorites [#2630](https://github.com/zowe/zowe-explorer-vscode/pull/2930)
+- Added the ability to switch between basic authentication and token-based authentication. [#2944](https://github.com/zowe/zowe-explorer-vscode/pull/2944)
+
+## `2.16.3`
+
+### Bug fixes
+
+- Fixed issue where USS files could not be submitted as JCL. [#2991](https://github.com/zowe/zowe-explorer-vscode/issues/2991)
+
+## `2.16.2`
+
+### Bug fixes
+
+- Update dependencies for technical currency purposes.
+- Fix issue Right-click-delete option deleting the currently open/selected file and not the file which is right-clicked when members having same name [#2941](https://github.com/zowe/zowe-explorer-vscode/issues/2941)
+- Fixed issue where Download Spool action could fail to find spool files to download. [#2943](https://github.com/zowe/zowe-explorer-vscode/pull/2943)
+
+## `2.16.1`
+
+### Bug fixes
+
+- Fixed issue where multiple extensions that contribute profiles to a tree view using the Zowe Explorer API may fail to load. [#2888](https://github.com/zowe/zowe-explorer-vscode/issues/2888)
+
+## `2.16.0`
+
+### New features and enhancements
+
+- Added support for `consoleName` property in z/OSMF profiles when issuing MVS commands. [#1667](https://github.com/zowe/vscode-extension-for-zowe/issues/1667)
+- Updated sorting of PDS members to show items without stats at bottom of list. [#2660](https://github.com/zowe/vscode-extension-for-zowe/issues/2660)
+- Added support to view the Encoding history for MVS and Dataset in the History View. [#2776](https://github.com/zowe/zowe-explorer-vscode/pull/2776)
+- Updated MVS view progress indicator for entering a filter search. [#2181](https://github.com/zowe/zowe-explorer-vscode/issues/2181)
+- Added error handling for when the default credential manager is unable to initialize. [#2811](https://github.com/zowe/zowe-explorer-vscode/issues/2811)
+- Provide users with the option to upload binary files by implementing a "Upload Files (Binary)" right-click option in the USS tree. [#1956](https://github.com/zowe/zowe-explorer-vscode/issues/1956)
+- Added Status bar to indicate that data is being pulled from mainframe. [#2484](https://github.com/zowe/zowe-explorer-vscode/issues/2484)
+- Added PEM certificate support as an authentication method for logging into the API ML. [#2621](https://github.com/zowe/zowe-explorer-vscode/issues/2621)
+- Added a confirmation dialog when the encoding is changed for an unsaved data set or USS file. [#2911](https://github.com/zowe/zowe-explorer-vscode/pull/2911)
+- Added a "Copy Relative Path" context option for USS files and directories in the tree view. [#2908](https://github.com/zowe/zowe-explorer-vscode/pull/2908)
+- Added a "Copy Name" context option for data sets, jobs and spool files in the tree view. [#2908](https://github.com/zowe/zowe-explorer-vscode/pull/2908)
+
+### Bug fixes
+
+- Fixed issue where clicking on a submitted job hyperlink throws an error. [#2813](https://github.com/zowe/vscode-extension-for-zowe/issues/2813)
+- Omitted the following Zowe Explorer commands from the Command Palette that do not execute properly when run as a standalone command: [#2853](https://github.com/zowe/zowe-explorer-vscode/pull/2853)
+  - `Zowe Explorer: Cancel job`
+  - `Zowe Explorer: Filter jobs`
+  - `Zowe Explorer: Filter PDS members`
+  - `Zowe Explorer: Sort jobs`
+  - `Zowe Explorer: Sort PDS members`
+  - `Zowe Explorer: Start Polling`
+  - `Zowe Explorer: Stop Polling`
+- Duplicated profile schema writing on repeated Team Config file initialization:
+  [#2828](https://github.com/zowe/zowe-explorer-vscode/pull/2828)
+- Fixed issue where saving changes to favorited PDS member fails when custom temp folder is set on Windows. [#2880](https://github.com/zowe/zowe-explorer-vscode/issues/2880)
+- Fixed issue where data sets or members containing binary content cannot be opened. [#2696](https://github.com/zowe/zowe-explorer-vscode/issues/2696)
+
+## `2.15.4`
+
+### Bug fixes
+
+- Fixed issue where new PDS member node cannot be re-opened unless you pull from mainframe. [#2857](https://github.com/zowe/zowe-explorer-vscode/issues/2857)
+- Fixed issue where expanding a favorited PDS resulted in an error message. [#2873](https://github.com/zowe/zowe-explorer-vscode/issues/2873)
+
+## `2.15.3`
+
+### Bug fixes
+
+- Fixed error that could occur when listing data set members that contain control characters in the name. [#2807](https://github.com/zowe/zowe-explorer-vscode/pull/2807)
+- Fixed issue where saving changes to a favorited data set or USS file could fail when it is opened outside of favorites. [#2820](https://github.com/zowe/vscode-extension-for-zowe/pull/2820)
+- Moved schema warnings into the log file (rather than a UI message) to minimize end-user disruption. [#2860](https://github.com/zowe/zowe-explorer-vscode/pull/2860)
+- Fixed duplicated profile schema writing with repeated Team Config file initialization. [#2828](https://github.com/zowe/zowe-explorer-vscode/pull/2828)
+
+## `2.15.2`
+
+### Bug fixes
+
+- Fixed issue where files left open in prior VS Code session cannot be uploaded to mainframe after window is reloaded. [#2758](https://github.com/zowe/vscode-extension-for-zowe/issues/2758)
+- Fixed issue where saving changes to favorited data set or USS file could fail. [#2801](https://github.com/zowe/vscode-extension-for-zowe/pull/2801)
+
+## `2.15.1`
+
+### Bug fixes
+
+- Fixed issue where VS Code quick pick separators were used in environments that did not support the feature. [#2771](https://github.com/zowe/vscode-extension-for-zowe/pull/2771)
+
+## `2.15.0`
+
+### New features and enhancements
+
+- Implemented sorting of PDS members by date created [#2707](https://github.com/zowe/vscode-extension-for-zowe/pull/2707)
+- Added the capability for extenders to contribute new profile types to the Zowe schema during extender activation. [#2508](https://github.com/zowe/vscode-extension-for-zowe/issues/2508)
+- Sort encoding by the latest encoding and filter any duplicate encoding if it already exists.
+- Implemented sorting of jobs by timestamp(on last job ran) [#1685](https://github.com/zowe/vscode-extension-for-zowe/issues/1685)
+
+### Bug fixes
+
+- Adjusted order of 'Manage Profile' and 'Edit History' in the jobs tree's context menu to match the other trees. [#2670](https://github.com/zowe/vscode-extension-for-zowe/issues/2670)
+- Fixed issue where spools with duplicate DD names would overwrite each other causing less spools in job output view [#2315](https://github.com/zowe/vscode-extension-for-zowe/issues/2315)
+- To fix Strange behaviour with the Job label in Job Favorites [#2632](https://github.com/zowe/vscode-extension-for-zowe/issues/2632)
+- Fixed issue of migrate/recall icons and right-click options now update instantly upon selection, eliminating the need to reload VS Code. [#2755](https://github.com/zowe/vscode-extension-for-zowe/issues/2755)
+- To fix error when user clicks on a favourited job [#2618](https://github.com/zowe/vscode-extension-for-zowe/issues/2618)
+
+## `2.14.1`
+
+### Bug fixes
+
+- Update transitive dependencies for technical currency.
+
+## `2.14.0`
+
+### New features and enhancements
+
 - Added new data set creation template for partitioned data set extended. [#2600](https://github.com/zowe/vscode-extension-for-zowe/issues/2600)
 - Added "Open with Encoding" feature to open data sets and USS files in a non-standard codepage. [#2435](https://github.com/zowe/vscode-extension-for-zowe/issues/2435)
+- Adopted new common methods for `loginWithBaseProfile` and `logoutWithBaseProfile`. [#2493](https://github.com/zowe/vscode-extension-for-zowe/pull/2493)
+- Added APIML dynamic token support. [#2665](https://github.com/zowe/vscode-extension-for-zowe/issues/2665)
 - Implemented profile determination without triggering quick pick for `Submit JCL` if the file is part of Zowe Explorer's temp files. [#2628](https://github.com/zowe/vscode-extension-for-zowe/issues/2628)
 
 ### Bug fixes
@@ -18,6 +768,9 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 - Fixed failure to refresh token value after user logs in to authentication. [#2638](https://github.com/zowe/vscode-extension-for-zowe/issues/2638)
 - Fixed order of spool files reverses when the Job is expanded and collapsed. [#2644](https://github.com/zowe/vscode-extension-for-zowe/pull/2644)
 - Fixed local filtering of jobs to work with SMFID (exec-member field). [#2651](https://github.com/zowe/vscode-extension-for-zowe/pull/2651)
+- Fixed tree item labels failing to update after renaming an MVS or USS file or folder. [#2656](https://github.com/zowe/vscode-extension-for-zowe/issues/2656)
+- Updated the `@zowe/cli` dependency to address the "blksz to 0 after an Allocate Like" issue. [#2610](https://github.com/zowe/vscode-extension-for-zowe/pull/2610). Thanks @KevinLoesch1
+- Fixed unintended behavior in `ProfileUtils.isProfileUsingBasicAuth`. [#2664](https://github.com/zowe/vscode-extension-for-zowe/issues/2664)
 - Fixed the recent search job id filter. [#2562](https://github.com/zowe/vscode-extension-for-zowe/issues/2562)
 
 ## `2.13.1`
@@ -198,7 +951,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 ### Bug fixes
 
 - Fixed issue with silent failures when uploading members into a data set. [#2167](https://github.com/zowe/vscode-extension-for-zowe/issues/2167)
-- Fixed an issue where VSCode did not provide all context menu options for a profile node after a multi-select operation. [#2108](https://github.com/zowe/vscode-extension-for-zowe/pull/2108)
+- Fixed an issue where VS Code did not provide all context menu options for a profile node after a multi-select operation. [#2108](https://github.com/zowe/vscode-extension-for-zowe/pull/2108)
 - Fixed an issue where the "Paste" option is shown for a multi-select operation in the "Data Sets" view.
 - Fixed a z/OSMF issue for Data Sets and Jobs with special characters in the names. [#2175](https://github.com/zowe/vscode-extension-for-zowe/issues/2175)
 - Fixed redundant text in error messages that included the same error details twice.
@@ -275,7 +1028,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 
 ### Bug fixes
 
-- Fixed missing localization for certain VScode error/info/warning messages. [#1722](https://github.com/zowe/vscode-extension-for-zowe/issues/1722)
+- Fixed missing localization for certain VS Code error/info/warning messages. [#1722](https://github.com/zowe/vscode-extension-for-zowe/issues/1722)
 - Fixed "Allocate Like" error that prevented proper execution. [#1973](https://github.com/zowe/vscode-extension-for-zowe/issues/1973)
 - Fixed de-sync issue between Data Set and Favorites panels when adding or deleting datasets/members that were favorited. [#1488](https://github.com/zowe/vscode-extension-for-zowe/issues/1488)
 - Added logging in places where errors were being caught and ignored.
@@ -500,7 +1253,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 
 ## `1.15.1`
 
-- Fixed the issue that required the vscode module to be imported in the API package [#1318](https://github.com/zowe/vscode-extension-for-zowe/pull/1318). Thanks @JillieBeanSim
+- Fixed the issue that required the `vscode` module to be imported in the API package [#1318](https://github.com/zowe/vscode-extension-for-zowe/pull/1318). Thanks @JillieBeanSim
 
 ## `1.15.0`
 
@@ -526,7 +1279,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 
 - Updated the dialog text for issuing MVS commands. Now the text of the function is `Zowe: Issue MVS Command` [#1230](https://github.com/zowe/vscode-extension-for-zowe/pull/1230). Thanks @JillieBeanSim
 - Added the prompt for credentials when issuing MVS commands, using the right click action, against profiles with missing credentials [#1231](https://github.com/zowe/vscode-extension-for-zowe/pull/1231). Thanks @JillieBeanSim
-- Added the Prerequisites section to the Zowe Explorer Extension for FTP ReadMe [#1246](https://github.com/zowe/vscode-extension-for-zowe/pull/1246). Thanks @lauren-li
+- Added the Prerequisites section to the IBM z/OS FTP for Zowe Explorer ReadMe [#1246](https://github.com/zowe/vscode-extension-for-zowe/pull/1246). Thanks @lauren-li
 - Added Open VSX to the deployment pipeline [#1240](https://github.com/zowe/vscode-extension-for-zowe/pull/1240). Thanks @zFernand0
 
 ## `1.13.0`
@@ -658,7 +1411,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 - Provision of profile association links to support extenders of Zowe Explorer. Thanks @Colin-Stone
 - Creation of an extender API for extenders of Zowe Explorer. Thanks @Colin-Stone
 - Management of VSAM files within Dataset explorer. Thanks @Colin-Stone
-- VSCode context now based on Regular expression for flexibility. Thanks @Colin-Stone
+- VS Code context now based on Regular expression for flexibility. Thanks @Colin-Stone
 - Vsix file deployment via Theia pipeline. Thanks @crawr
 - Reduction in size of extension.ts file. Thanks @katelynienaber
 - ContextValue of undefined error addressed for new members. Thanks @katelynienaber
@@ -683,8 +1436,8 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 - Fixed tab name when renaming dataset. Thanks @stepanzharychevbroadcom
 - Improved performance when renaming datasets and members. Thanks @CForrest97
 - Added prompting of credentials if previous credentials where entered incorrectly. Thanks @jellypuno
-- Added support for VSCode Quick Open shortcut. Thanks @katelynienaber
-- Added support for VSCode Open Recent Files shortcut. Thanks @katelynienaber
+- Added support for VS Code Quick Open shortcut. Thanks @katelynienaber
+- Added support for VS Code Open Recent Files shortcut. Thanks @katelynienaber
 - Fixed USS Favorites not being remembered. Thanks @Colin-Stone
 - Setup automated regression testing on a Theia environment. Thanks @crawr
 - Fixed copying dataset on temporary folder #635. Thanks @Colin-Stone
@@ -776,7 +1529,7 @@ All notable changes to the "vscode-extension-for-zowe" extension will be documen
 
 ## `1.0.0`
 
-- VSCode centric Connection settings. Thanks @crawr, @jellypuno
+- VS Code centric Connection settings. Thanks @crawr, @jellypuno
   - Credential prompting in profiles and favorite . Thanks @crawr, @jellypuno
 - Dataset and Dataset member copy and renaming function. Thanks @CForrest97
 - Theia support including documentation.

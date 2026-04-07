@@ -10,24 +10,14 @@
  */
 
 import * as vscode from "vscode";
-import { IZoweLogger, MessageSeverity } from "../logger";
+import { MessageSeverity } from "../logger";
 import { IZoweTree, IZoweTreeNode } from "../tree";
-import { DOUBLE_CLICK_SPEED_MS } from "./Constants";
+import { Constants } from "./Constants";
+import { GuiOptions } from "./GuiOptions";
 
-export interface GuiMessageOptions<T extends string | vscode.MessageItem> {
-    severity?: MessageSeverity;
-    items?: T[];
-    logger?: IZoweLogger;
-    vsCodeOpts?: vscode.MessageOptions;
-}
-
-export interface WebviewOptions {
-    viewType: string;
-    title: string;
-    showOptions: vscode.ViewColumn | { viewColumn: vscode.ViewColumn; preserveFocus?: boolean };
-    vscode?: vscode.WebviewPanelOptions & vscode.WebviewOptions;
-}
-
+/**
+ * Wrapper for VS Code GUI API's
+ */
 export namespace Gui {
     /**
      * Creates a new output channel with the given name and language ID
@@ -69,7 +59,7 @@ export namespace Gui {
      *
      * @see vscode.window.createWebviewPanel for more details
      */
-    export function createWebviewPanel(options: WebviewOptions): vscode.WebviewPanel {
+    export function createWebviewPanel(options: GuiOptions.GuiWebviewOptions): vscode.WebviewPanel {
         return vscode.window.createWebviewPanel(options.viewType, options.title, options.showOptions, options.vscode);
     }
 
@@ -81,7 +71,7 @@ export namespace Gui {
      */
     export function errorMessage<T extends string | vscode.MessageItem>(
         message: string,
-        options?: Omit<GuiMessageOptions<T>, "severity">
+        options?: Omit<GuiOptions.GuiMessageOptions<T>, "severity">
     ): Thenable<T | undefined> {
         return showMessage(message, {
             ...options,
@@ -97,7 +87,7 @@ export namespace Gui {
      */
     export function infoMessage<T extends string | vscode.MessageItem>(
         message: string,
-        options?: Omit<GuiMessageOptions<T>, "severity">
+        options?: Omit<GuiOptions.GuiMessageOptions<T>, "severity">
     ): Thenable<T | undefined> {
         return showMessage(message, {
             ...options,
@@ -113,7 +103,7 @@ export namespace Gui {
      */
     export function warningMessage<T extends string | vscode.MessageItem>(
         message: string,
-        options?: Omit<GuiMessageOptions<T>, "severity">
+        options?: Omit<GuiOptions.GuiMessageOptions<T>, "severity">
     ): Thenable<T | undefined> {
         return showMessage(message, {
             ...options,
@@ -144,6 +134,11 @@ export namespace Gui {
      * @see vscode.window.showOpenDialog for more details
      */
     export function showOpenDialog(options?: vscode.OpenDialogOptions): Thenable<vscode.Uri[]> {
+        // Workaround for VS Code bug: If cached URI points to remote system
+        // but user is no longer connected to one, then dialog fails to open
+        if (vscode.env.remoteName == null && options?.defaultUri?.scheme === "vscode-remote") {
+            options.defaultUri = undefined;
+        }
         return vscode.window.showOpenDialog(options);
     }
 
@@ -190,12 +185,17 @@ export namespace Gui {
      */
     export function showQuickPick<T extends string>(
         items: readonly T[] | Thenable<readonly T[]>,
+        options: vscode.QuickPickOptions & { canPickMany: true },
+        token?: vscode.CancellationToken
+    ): Thenable<T[] | undefined>;
+    export function showQuickPick<T extends string>(
+        items: readonly T[] | Thenable<readonly T[]>,
         options?: vscode.QuickPickOptions,
         token?: vscode.CancellationToken
     ): Thenable<T | undefined>;
-    export function showQuickPick<T extends string>(
+    export function showQuickPick<T extends vscode.QuickPickItem>(
         items: readonly T[] | Thenable<readonly T[]>,
-        options?: vscode.QuickPickOptions & { canPickMany: true },
+        options: vscode.QuickPickOptions & { canPickMany: true },
         token?: vscode.CancellationToken
     ): Thenable<T[] | undefined>;
     export function showQuickPick<T extends vscode.QuickPickItem>(
@@ -205,9 +205,9 @@ export namespace Gui {
     ): Thenable<T | undefined>;
     export function showQuickPick<T extends vscode.QuickPickItem>(
         items: readonly T[] | Thenable<readonly T[]>,
-        options?: vscode.QuickPickOptions & { canPickMany: true },
+        options?: vscode.QuickPickOptions,
         token?: vscode.CancellationToken
-    ): Thenable<T[] | undefined> {
+    ): Thenable<T | T[] | undefined> {
         return vscode.window.showQuickPick(items, options, token);
     }
 
@@ -217,7 +217,10 @@ export namespace Gui {
      * @param options Any additional options for the message
      * @returns A thenable containing the selected item (if items were specified), or `undefined`
      */
-    export function showMessage<T extends string | vscode.MessageItem>(message: string, options?: GuiMessageOptions<T>): Thenable<T | undefined> {
+    export function showMessage<T extends string | vscode.MessageItem>(
+        message: string,
+        options?: GuiOptions.GuiMessageOptions<T>
+    ): Thenable<T | undefined> {
         const severity = options?.severity ?? MessageSeverity.INFO;
 
         if (options?.logger != null) {
@@ -313,7 +316,7 @@ export namespace Gui {
 
                 // If the time (in ms) between clicks is less than the defined DOUBLE_CLICK_SPEED_MS,
                 // recognize the action as a double-click.
-                return timeDelta <= DOUBLE_CLICK_SPEED_MS;
+                return timeDelta <= Constants.DOUBLE_CLICK_SPEED_MS;
             }
 
             provider.lastOpened = {

@@ -1,0 +1,855 @@
+/**
+ * This program and the accompanying materials are made available under the terms of the
+ * Eclipse Public License v2.0 which accompanies this distribution, and is available at
+ * https://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Copyright Contributors to the Zowe Project.
+ *
+ */
+
+import * as vscode from "vscode";
+import { imperative, ProfilesCache, Validation, PersistenceSchemaEnum, Sorting, AuthHandler, ZoweVsCodeExtension } from "@zowe/zowe-explorer-api";
+import { ZoweLocalStorage } from "../../../src/tools/ZoweLocalStorage";
+import { ZoweTreeProvider } from "../../../src/trees/ZoweTreeProvider";
+import {
+    createIProfile,
+    createISession,
+    createFileResponse,
+    createInstanceOfProfileInfo,
+    createGetConfigMock,
+} from "../../__mocks__/mockCreators/shared";
+import { Constants, JwtCheckResult } from "../../../src/configuration/Constants";
+import { Profiles } from "../../../src/configuration/Profiles";
+import { SettingsConfig } from "../../../src/configuration/SettingsConfig";
+import { ZoweLogger } from "../../../src/tools/ZoweLogger";
+import { ZoweJobNode } from "../../../src/trees/job/ZoweJobNode";
+import { SharedActions } from "../../../src/trees/shared/SharedActions";
+import { SharedTreeProviders } from "../../../src/trees/shared/SharedTreeProviders";
+import { UssFSProvider } from "../../../src/trees/uss/UssFSProvider";
+import { ZoweUSSNode } from "../../../src/trees/uss/ZoweUSSNode";
+import { createUSSSessionNode } from "../../__mocks__/mockCreators/uss";
+import { USSInit } from "../../../src/trees/uss/USSInit";
+import { JobInit } from "../../../src/trees/job/JobInit";
+import { createIJobObject, createJobSessionNode } from "../../__mocks__/mockCreators/jobs";
+import { createDatasetFavoritesNode, createDatasetSessionNode } from "../../__mocks__/mockCreators/datasets";
+import { DatasetInit } from "../../../src/trees/dataset/DatasetInit";
+import { IconGenerator } from "../../../src/icons/IconGenerator";
+import { ZoweExplorerApiRegister } from "../../../src/extending/ZoweExplorerApiRegister";
+import { AuthUtils } from "../../../src/utils/AuthUtils";
+
+async function createGlobalMocks() {
+    Object.defineProperty(ZoweLocalStorage, "globalState", {
+        value: {
+            get: () => ({ persistence: true, favorites: [], history: [], sessions: ["zosmf"], searchHistory: [], fileHistory: [] }),
+            update: jest.fn(),
+            keys: () => [],
+        },
+        configurable: true,
+    });
+    const profile = createIProfile();
+    const globalMocks = {
+        mockLoadNamedProfile: jest.fn(),
+        mockDefaultProfile: jest.fn(),
+        withProgress: jest.fn(),
+        createTreeView: jest.fn().mockReturnValue({ onDidCollapseElement: jest.fn() }),
+        mockAffects: jest.fn(),
+        mockEditSession: jest.fn(),
+        mockCheckCurrentProfile: jest.fn(),
+        mockDisableValidationContext: jest.fn(),
+        mockEnableValidationContext: jest.fn(),
+        getConfiguration: jest.fn(),
+        refresh: jest.fn(),
+        testProfile: profile,
+        testSession: createISession(),
+        testResponse: createFileResponse({ items: [] }),
+        testUSSTree: null,
+        testDSTree: null,
+        testUSSNode: null,
+        testSessionNode: null,
+        testTreeProvider: new ZoweTreeProvider(PersistenceSchemaEnum.USS, null),
+        mockGetProfileSetting: jest.fn(),
+        mockProfilesForValidation: [
+            {
+                name: profile.name,
+                status: "active",
+            },
+        ],
+        mockProfilesValidationSetting: jest.fn(),
+        mockSsoLogin: jest.fn(),
+        mockSsoLogout: jest.fn(),
+        ProgressLocation: jest.fn().mockImplementation(() => {
+            return {
+                Notification: 15,
+            };
+        }),
+        enums: jest.fn().mockImplementation(() => {
+            return {
+                Global: 1,
+                Workspace: 2,
+                WorkspaceFolder: 3,
+            };
+        }),
+        mockProfileInfo: createInstanceOfProfileInfo(),
+        mockProfilesCache: new ProfilesCache(imperative.Logger.getAppLogger()),
+        FileSystemProvider: {
+            createDirectory: jest.fn(),
+        },
+    };
+
+    jest.spyOn(UssFSProvider.instance, "createDirectory").mockImplementation(globalMocks.FileSystemProvider.createDirectory);
+
+    Object.defineProperty(globalMocks.mockProfilesCache, "getProfileInfo", {
+        value: jest.fn(() => {
+            return { value: globalMocks.mockProfileInfo, configurable: true };
+        }),
+    });
+    Object.defineProperty(vscode, "ConfigurationTarget", { value: globalMocks.enums, configurable: true });
+    Object.defineProperty(vscode.window, "createTreeView", { value: globalMocks.createTreeView, configurable: true });
+    Object.defineProperty(vscode, "ProgressLocation", { value: globalMocks.ProgressLocation, configurable: true });
+    Object.defineProperty(vscode.window, "withProgress", { value: globalMocks.withProgress, configurable: true });
+    Object.defineProperty(Profiles, "getInstance", {
+        value: jest.fn().mockReturnValue({
+            allProfiles: [globalMocks.testProfile, { name: "firstName" }, { name: "secondName" }],
+            getDefaultProfile: globalMocks.mockDefaultProfile,
+            validProfile: Validation.ValidationType.VALID,
+            validateProfiles: jest.fn(),
+            loadNamedProfile: globalMocks.mockLoadNamedProfile,
+            getBaseProfile: jest.fn(() => {
+                return globalMocks.testProfile;
+            }),
+            editSession: globalMocks.mockEditSession,
+            disableValidationContext: globalMocks.mockDisableValidationContext,
+            enableValidationContext: globalMocks.mockEnableValidationContext,
+            checkCurrentProfile: globalMocks.mockCheckCurrentProfile.mockReturnValue({
+                name: globalMocks.testProfile.name,
+                status: "active",
+            }),
+            showProfileInactiveMsg: jest.fn(),
+            getProfileSetting: globalMocks.mockGetProfileSetting.mockReturnValue({
+                name: globalMocks.testProfile.name,
+                status: "active",
+            }),
+            profilesForValidation: globalMocks.mockProfilesForValidation,
+            profileValidationSetting: globalMocks.mockProfilesValidationSetting.mockReturnValue({
+                name: globalMocks.testProfile.name,
+                setting: true,
+            }),
+            ssoLogin: globalMocks.mockSsoLogin,
+            ssoLogout: globalMocks.mockSsoLogout,
+            getProfileInfo: () => globalMocks.mockProfileInfo,
+            fetchAllProfiles: jest.fn(() => {
+                return [{ name: "profile1" }, { name: "profile2" }, { name: "base" }];
+            }),
+            fetchAllProfilesByType: jest.fn(() => {
+                return [{ name: "profile1" }];
+            }),
+        }),
+        configurable: true,
+    });
+    Object.defineProperty(SettingsConfig, "getDirectValue", {
+        value: createGetConfigMock({
+            "zowe.automaticProfileValidation": true,
+            "zowe.ds.default.sort": Sorting.DatasetSortOpts.Name,
+        }),
+    });
+
+    globalMocks.mockAffects.mockReturnValue(true);
+    globalMocks.withProgress.mockImplementation((progLocation, callback) => callback());
+    globalMocks.withProgress.mockReturnValue(globalMocks.testResponse);
+    globalMocks.testSessionNode = createUSSSessionNode(globalMocks.testSession, globalMocks.testProfile);
+    globalMocks.testUSSTree = await USSInit.createUSSTree(imperative.Logger.getAppLogger());
+    Object.defineProperty(globalMocks.testUSSTree, "refresh", { value: globalMocks.refresh, configurable: true });
+    globalMocks.testUSSTree.mSessionNodes.push(globalMocks.testSessionNode);
+    globalMocks.testUSSNode = new ZoweUSSNode({
+        label: "/u/test",
+        collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+        parentNode: globalMocks.testUSSTree.mSessionNodes[0],
+        session: globalMocks.testSession,
+    });
+    globalMocks.mockLoadNamedProfile.mockReturnValue(globalMocks.testProfile);
+    globalMocks.mockDefaultProfile.mockReturnValue(globalMocks.testProfile);
+    globalMocks.mockEditSession.mockReturnValue(globalMocks.testProfile);
+
+    return globalMocks;
+}
+
+describe("ZoweJobNode unit tests - Function editSession", () => {
+    async function createBlockMocks(globalMocks) {
+        const newMocks = {
+            testIJob: createIJobObject(),
+            testJobsProvider: await JobInit.createJobsTree(imperative.Logger.getAppLogger()),
+            jobNode: null,
+        };
+
+        newMocks.jobNode = new ZoweJobNode({
+            label: "jobtest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+            session: globalMocks.testSession,
+            profile: globalMocks.testProfile,
+            job: newMocks.testIJob,
+        });
+        newMocks.jobNode.contextValue = "job";
+        newMocks.jobNode.dirty = true;
+
+        return newMocks;
+    }
+
+    it("Tests that editSession is executed successfully", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        await blockMocks.testJobsProvider.editSession(blockMocks.jobNode, globalMocks.testUSSTree);
+        expect(globalMocks.mockEditSession).toHaveBeenCalled();
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+    it("Tests that the session is edited and added to only the specific tree modified", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+        const deleteSessionSpy = jest.spyOn(blockMocks.testJobsProvider, "deleteSession");
+        jest.spyOn(SharedTreeProviders, "getProviderForNode").mockReturnValue(blockMocks.testJobsProvider);
+        jest.spyOn(blockMocks.jobNode, "getSession").mockReturnValue(null);
+        blockMocks.jobNode.contextValue = Constants.JOBS_SESSION_CONTEXT;
+        await blockMocks.testJobsProvider.editSession(blockMocks.jobNode);
+        expect(globalMocks.mockEditSession).toHaveBeenCalled();
+        expect(deleteSessionSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe("Tree Provider unit tests, function getTreeItem", () => {
+    it("Tests that getTreeItem returns an object of type vscode.TreeItem", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        const sampleElement = new ZoweUSSNode({
+            label: "/u/myUser",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            profile: globalMocks.testProfile,
+        });
+        expect(globalMocks.testUSSTree.getTreeItem(sampleElement)).toBeInstanceOf(vscode.TreeItem);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider unit tests, function getParent", () => {
+    it("Tests that getParent returns undefined when called on a root node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        // Await return value from getChildren
+        const rootChildren = await globalMocks.testUSSTree.getChildren();
+        const parent = globalMocks.testUSSTree.getParent(rootChildren[1]);
+
+        expect(parent).toBeUndefined();
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+
+    it("Tests that getParent returns the correct ZoweUSSNode when called on a non-root node", async () => {
+        const globalMocks = await createGlobalMocks();
+
+        // Creating child of session node
+        const sampleChild: ZoweUSSNode = new ZoweUSSNode({
+            label: "/u/myUser/zowe1",
+            collapsibleState: vscode.TreeItemCollapsibleState.None,
+            parentNode: globalMocks.testUSSTree.mSessionNodes[1],
+            session: globalMocks.testSession,
+        });
+
+        expect(globalMocks.testUSSTree.getParent(sampleChild)).toBe(globalMocks.testUSSTree.mSessionNodes[1]);
+    });
+});
+
+describe("Tree Provider unit tests, function getTreeItem", () => {
+    it("Testing the onDidConfiguration", async () => {
+        const globalMocks = await createGlobalMocks();
+        globalMocks.getConfiguration.mockReturnValue({
+            get: () => ["[test]: /u/aDir{directory}", "[test]: /u/myFile.txt{textFile}"],
+            update: jest.fn(() => {
+                return {};
+            }),
+        });
+
+        const Event = jest.fn().mockImplementation(() => {
+            return {
+                affectsConfiguration: globalMocks.mockAffects,
+            };
+        });
+        const e = new Event();
+        jest.spyOn(vscode.workspace, "getConfiguration").mockImplementationOnce(globalMocks.getConfiguration);
+        jest.spyOn(vscode.workspace, "getConfiguration").mockImplementationOnce(globalMocks.getConfiguration);
+        globalMocks.getConfiguration.mockClear();
+
+        await globalMocks.testUSSTree.onDidChangeConfiguration(e);
+        expect(globalMocks.getConfiguration.mock.calls.length).toBe(2);
+    });
+});
+
+describe("Tree Provider unit tests, function flipState", () => {
+    it("Testing that expand tree is executed successfully", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        const folder = new ZoweUSSNode({
+            label: "/u/myuser",
+            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            parentNode: globalMocks.testUSSTree.mSessionNodes[0],
+            session: globalMocks.testSession,
+        });
+        folder.contextValue = Constants.USS_DIR_CONTEXT;
+        folder.dirty = false;
+
+        // Testing flipState to open
+        await globalMocks.testUSSTree.flipState(folder, true);
+        expect(JSON.stringify(folder.iconPath)).toContain("folder-open.svg");
+        expect(folder.dirty).toBe(false);
+
+        // Testing flipState to closed
+        await globalMocks.testUSSTree.flipState(folder, false);
+        expect(JSON.stringify(folder.iconPath)).toContain("folder-closed.svg");
+        expect(folder.dirty).toBe(true);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+
+    it("Tests that flipState is executed successfully for a collapsed, validated session node", async () => {
+        const globalMocks = await createGlobalMocks();
+
+        await globalMocks.testUSSTree.flipState(globalMocks.testSessionNode, false);
+        expect(JSON.stringify(globalMocks.testSessionNode.iconPath)).toContain("folder-root-connected-closed.svg");
+    });
+
+    it("Tests that flipState is executed successfully for an expanded, validated session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        await globalMocks.testUSSTree.flipState(globalMocks.testSessionNode, true);
+        expect(JSON.stringify(globalMocks.testSessionNode.iconPath)).toContain("folder-root-connected-open.svg");
+    });
+});
+
+describe("ZoweJobNode unit tests - Function checkCurrentProfile", () => {
+    async function createBlockMocks(globalMocks) {
+        const newMocks = {
+            testIJob: createIJobObject(),
+            testJobsProvider: await JobInit.createJobsTree(imperative.Logger.getAppLogger()),
+            jobNode: null,
+        };
+
+        newMocks.jobNode = new ZoweJobNode({
+            label: "jobtest",
+            collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+            session: globalMocks.testSession,
+            profile: globalMocks.testProfile,
+            job: newMocks.testIJob,
+        });
+        newMocks.jobNode.contextValue = "job";
+        newMocks.jobNode.dirty = true;
+
+        return newMocks;
+    }
+    beforeEach(() => {
+        // we should always try to start with a clean state
+        jest.restoreAllMocks();
+        jest.spyOn(ZoweVsCodeExtension, "getZoweExplorerApi").mockReturnValue({
+            getCommonApi: () => ({
+                getSession: () => createISession(),
+            }),
+        } as any);
+    });
+
+    it("Tests that checkCurrentProfile is executed successfully with active status", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+
+        await blockMocks.testJobsProvider.checkCurrentProfile(blockMocks.jobNode);
+        expect(globalMocks.mockCheckCurrentProfile).toHaveBeenCalled();
+    });
+
+    it("Tests that checkCurrentProfile is executed successfully with active status", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+        jest.spyOn(AuthHandler, "getSessFromProfile").mockReturnValue({ ISession: { type: "token" } } as any);
+        const checkJwtSpy = jest.spyOn(ZoweTreeProvider as any, "checkJwtForProfile");
+
+        await blockMocks.testJobsProvider.checkCurrentProfile(blockMocks.jobNode);
+        expect(checkJwtSpy).toHaveBeenCalled();
+    });
+    it("Tests that checkCurrentProfile is executed successfully with unverified status", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+        blockMocks.jobNode.contextValue = "SERVER";
+        Object.defineProperty(Profiles, "getInstance", {
+            value: jest.fn(() => {
+                return {
+                    checkCurrentProfile: globalMocks.mockCheckCurrentProfile.mockReturnValueOnce({
+                        name: globalMocks.testProfile.name,
+                        status: "unverified",
+                    }),
+                    validProfile: Validation.ValidationType.UNVERIFIED,
+                };
+            }),
+        });
+
+        await blockMocks.testJobsProvider.checkCurrentProfile(blockMocks.jobNode);
+        expect(globalMocks.mockCheckCurrentProfile).toHaveBeenCalled();
+    });
+
+    it("Tests that checkCurrentProfile is executed successfully with inactive status", async () => {
+        const globalMocks = await createGlobalMocks();
+        const blockMocks = await createBlockMocks(globalMocks);
+        jest.spyOn(SharedTreeProviders, "providers", "get").mockReturnValue({
+            ds: { setStatusForSession: jest.fn(), mSessionNodes: [createDatasetSessionNode(createISession(), createIProfile())] } as any,
+            uss: { setStatusForSession: jest.fn(), mSessionNodes: [createUSSSessionNode(createISession(), createIProfile())] } as any,
+            job: { setStatusForSession: jest.fn(), mSessionNodes: [createJobSessionNode(createISession(), createIProfile())] } as any,
+        });
+        blockMocks.jobNode.contextValue = "session";
+        globalMocks.mockCheckCurrentProfile.mockResolvedValueOnce({
+            name: globalMocks.testProfile.name,
+            status: "inactive",
+        });
+        await blockMocks.testJobsProvider.checkCurrentProfile(blockMocks.jobNode);
+        expect(globalMocks.mockCheckCurrentProfile).toHaveBeenCalled();
+    });
+});
+
+describe("Tree Provider Unit Tests - refreshHomeProfileContext", () => {
+    it("should set tthe node context value to the HOME_SUFFIX global value", async () => {
+        const globalMocks = await createGlobalMocks();
+        globalMocks.mockProfileInfo.usingTeamConfig = true;
+        globalMocks.mockProfileInfo.getOsLocInfo = () => [{ global: true }];
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        await expect(globalMocks.testUSSTree.refreshHomeProfileContext(globalMocks.testUSSNode)).resolves.not.toThrow();
+        expect(globalMocks.testUSSNode.contextValue).toEqual("directory_home");
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function getTreeType", () => {
+    it("should return the persistence schema of the tree", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        expect(globalMocks.testUSSTree.getTreeType()).toEqual(globalMocks.testUSSTree.persistenceSchema);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function findNonFavoritedNode", () => {
+    it("should return undefined", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        expect(globalMocks.testTreeProvider.findNonFavoritedNode(globalMocks.testUSSNode)).toEqual(undefined);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function findFavoritedNode", () => {
+    it("should return undefined", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        expect(globalMocks.testTreeProvider.findFavoritedNode(globalMocks.testUSSNode)).toEqual(undefined);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function renameFavorite", () => {
+    it("should return undefined", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        expect(globalMocks.testTreeProvider.renameFavorite(globalMocks.testUSSNode, "test")).toEqual(undefined);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function renameNode", () => {
+    it("should return undefined", async () => {
+        const globalMocks = await createGlobalMocks();
+        const spy = jest.spyOn(ZoweLogger, "trace");
+        expect(globalMocks.testTreeProvider.renameNode("test", "test1", "test2")).toEqual(undefined);
+        expect(spy).toHaveBeenCalled();
+        spy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function ssoLogin", () => {
+    const createBlockMocks = () => {
+        const executeCommandSpy = jest.spyOn(vscode.commands, "executeCommand");
+        return {
+            executeCommandSpy,
+        };
+    };
+
+    let blockMocks;
+    beforeEach(() => {
+        blockMocks = createBlockMocks();
+    });
+    afterEach(() => {
+        blockMocks.executeCommandSpy.mockClear();
+    });
+
+    it("should only call zowe.ds.refreshAll for a Data Set session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const dsNode = createDatasetSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogin(dsNode);
+        expect(globalMocks.mockSsoLogin).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.ds.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+    });
+
+    it("should only call zowe.uss.refreshAll for a USS session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const ussNode = createUSSSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogin(ussNode);
+        expect(globalMocks.mockSsoLogin).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.ds.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+    });
+
+    it("should only call zowe.jobs.refreshAllJobs for a Job session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const jobNode = createJobSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogin(jobNode);
+        expect(globalMocks.mockSsoLogin).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.ds.refreshAll");
+    });
+});
+
+describe("Tree Provider Unit Tests - function ssoLogout", () => {
+    const createBlockMocks = () => {
+        const executeCommandSpy = jest.spyOn(vscode.commands, "executeCommand");
+        return {
+            executeCommandSpy,
+        };
+    };
+
+    let blockMocks;
+    beforeEach(() => {
+        blockMocks = createBlockMocks();
+    });
+    afterEach(() => {
+        blockMocks.executeCommandSpy.mockClear();
+    });
+
+    afterAll(() => {
+        blockMocks.executeCommandSpy.mockRestore();
+    });
+
+    it("should only call zowe.ds.refreshAll for a Data Set session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const dsNode = createDatasetSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogout(dsNode);
+        expect(globalMocks.mockSsoLogout).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.ds.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+    });
+
+    it("should only call zowe.uss.refreshAll for a USS session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const ussNode = createUSSSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogout(ussNode);
+        expect(globalMocks.mockSsoLogout).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.ds.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+    });
+
+    it("should only call zowe.jobs.refreshAllJobs for a Job session node", async () => {
+        const globalMocks = await createGlobalMocks();
+        const jobNode = createJobSessionNode(globalMocks.testSession, globalMocks.testProfile);
+
+        await globalMocks.testTreeProvider.ssoLogout(jobNode);
+        expect(globalMocks.mockSsoLogout).toHaveBeenCalled();
+        expect(blockMocks.executeCommandSpy).toHaveBeenCalledWith("zowe.jobs.refreshAllJobs");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.uss.refreshAll");
+        expect(blockMocks.executeCommandSpy).not.toHaveBeenCalledWith("zowe.ds.refreshAll");
+    });
+});
+
+describe("Tree Provider Unit Tests - function loadProfileByPersistedProfile", () => {
+    it("should load all profiles for a tree provider", async () => {
+        const globalMocks = await createGlobalMocks();
+        globalMocks.testDSTree = DatasetInit.createDatasetTree(imperative.Logger.getAppLogger());
+        globalMocks.testDSTree.mSessionNodes = [
+            { label: "sestest", getProfileName: (): string => "profile1" },
+            { label: "sestest", getProfileName: (): string => "profile2" },
+        ];
+        globalMocks.testDSTree.getSessions = (): string[] => ["profile1", "profile2"];
+        globalMocks.testDSTree.addSingleSession = jest.fn();
+
+        const resetValidationSettingsSpy = jest.spyOn(SharedActions, "resetValidationSettings");
+        resetValidationSettingsSpy.mockImplementation().mockClear();
+        const zoweLoggerWarnSpy = jest.spyOn(ZoweLogger, "warn");
+
+        await expect(
+            (ZoweTreeProvider.prototype as any).loadProfileByPersistedProfile(globalMocks.testDSTree, undefined, true)
+        ).resolves.not.toThrow();
+        expect(globalMocks.testDSTree.addSingleSession).toHaveBeenCalledTimes(2);
+        expect(resetValidationSettingsSpy).toHaveBeenCalledTimes(2);
+        expect(zoweLoggerWarnSpy).not.toHaveBeenCalled();
+    });
+
+    it("should load all profiles of a given type for a tree provider", async () => {
+        const globalMocks = await createGlobalMocks();
+        globalMocks.testDSTree = DatasetInit.createDatasetTree(imperative.Logger.getAppLogger());
+        globalMocks.testDSTree.mSessionNodes = [
+            { label: "sestest", getProfileName: (): string => "profile1" },
+            { label: "sestest", getProfileName: (): string => "profile2" },
+        ];
+        globalMocks.testDSTree.getSessions = (): string[] => ["profile1", "profile2"];
+        globalMocks.testDSTree.addSingleSession = jest.fn();
+
+        const resetValidationSettingsSpy = jest.spyOn(SharedActions, "resetValidationSettings");
+        resetValidationSettingsSpy.mockImplementation().mockClear();
+        const zoweLoggerWarnSpy = jest.spyOn(ZoweLogger, "warn");
+
+        await expect((ZoweTreeProvider.prototype as any).loadProfileByPersistedProfile(globalMocks.testDSTree, "zosmf", true)).resolves.not.toThrow();
+        expect(globalMocks.testDSTree.addSingleSession).toHaveBeenCalledTimes(1);
+        expect(resetValidationSettingsSpy).toHaveBeenCalledTimes(1);
+        expect(zoweLoggerWarnSpy).not.toHaveBeenCalled();
+    });
+
+    it("should reset validation settings and warn the user of an error when loading default", async () => {
+        const globalMocks = await createGlobalMocks();
+        globalMocks.testDSTree = DatasetInit.createDatasetTree(imperative.Logger.getAppLogger());
+        globalMocks.testDSTree.mSessionNodes = [{ label: "sestest", getProfileName: (): string => "profile1" }];
+        globalMocks.testDSTree.getSessions = (): string[] => ["profile1"];
+        globalMocks.testDSTree.addSingleSession = jest.fn().mockImplementationOnce(() => Promise.resolve());
+
+        const resetValidationSettingsSpy = jest.spyOn(SharedActions, "resetValidationSettings");
+        resetValidationSettingsSpy.mockImplementation();
+        jest.spyOn(Profiles.getInstance(), "getDefaultProfile").mockImplementationOnce(() => {
+            throw new Error();
+        });
+
+        const zoweLoggerWarnSpy = jest.spyOn(ZoweLogger, "warn");
+
+        await expect(ZoweTreeProvider.prototype["loadProfileByPersistedProfile"](globalMocks.testDSTree, "zosmf", true)).resolves.not.toThrow();
+        expect(globalMocks.testDSTree.addSingleSession).toHaveBeenCalledTimes(1); // only once due to error thrown with getDefaultProfile
+        expect(resetValidationSettingsSpy).toHaveBeenCalled();
+        expect(zoweLoggerWarnSpy).toHaveBeenCalledTimes(1);
+        resetValidationSettingsSpy.mockClear();
+        zoweLoggerWarnSpy.mockClear();
+    });
+});
+
+describe("Tree Provider Unit Tests - function isGlobalProfileNode", () => {
+    it("returns true if the profile is located in the global config", async () => {
+        const globalMocks = await createGlobalMocks();
+        const getAllProfilesMock = jest.spyOn(globalMocks.mockProfileInfo, "getAllProfiles").mockReturnValue([
+            {
+                profName: "sestest",
+            },
+        ]);
+        const getOsLocInfoMock = jest.spyOn(globalMocks.mockProfileInfo, "getOsLocInfo").mockReturnValue([{ global: true }]);
+        await expect((globalMocks.testTreeProvider as any).isGlobalProfileNode({ getProfileName: () => "sestest" })).resolves.toBe(true);
+        getAllProfilesMock.mockRestore();
+        getOsLocInfoMock.mockRestore();
+    });
+
+    it("returns false if the node does not have HOME_SUFFIX in its contextValue", async () => {
+        const globalMocks = await createGlobalMocks();
+        const getAllProfilesMock = jest.spyOn(globalMocks.mockProfileInfo, "getAllProfiles").mockReturnValue([
+            {
+                profName: "sestest",
+            },
+        ]);
+        const getOsLocInfoMock = jest.spyOn(globalMocks.mockProfileInfo, "getOsLocInfo").mockReturnValue([{ global: false }]);
+        await expect(
+            (globalMocks.testTreeProvider as any).isGlobalProfileNode({
+                contextValue: Constants.FAV_PROFILE_CONTEXT,
+                getProfileName: () => "sestest",
+            })
+        ).resolves.toBe(false);
+        getAllProfilesMock.mockRestore();
+        getOsLocInfoMock.mockRestore();
+    });
+});
+
+describe("Tree Provider Unit Tests - function checkJwtForProfile", () => {
+    function getBlockMocks(supportTokens: boolean = true) {
+        const getAllProfiles = jest.fn().mockReturnValue([
+            {
+                profName: "zosmf",
+                profType: "zosmf",
+                isDefaultProfile: false,
+                profLoc: {
+                    locType: imperative.ProfLocType.TEAM_CONFIG,
+                    osLoc: ["/a/b/c/zowe.config.json"],
+                    jsonLoc: ["profiles.zosmf"],
+                },
+            },
+        ]);
+        const hasTokenExpiredForProfile = jest.fn();
+        const mergeArgsForProfile = jest.fn();
+        const profile = createIProfile();
+        profile.profile.tokenValue = "abcdefgh12345678";
+
+        const getTokenTypeName = jest.fn().mockReturnValue(supportTokens ? "apimlAuthenticationToken" : undefined);
+        const getCommonApiMock = jest.spyOn(ZoweExplorerApiRegister.prototype, "getCommonApi").mockReturnValue({
+            getTokenTypeName,
+        } as any);
+
+        const loadNamedProfile = jest.fn().mockResolvedValue(profile);
+        const showProfileInactiveMsg = jest.fn();
+        const profilesGetInstance = jest.spyOn(Profiles, "getInstance").mockReturnValue({
+            getProfileInfo: jest.fn().mockResolvedValue({
+                hasTokenExpiredForProfile,
+                getAllProfiles,
+                mergeArgsForProfile,
+            } as any),
+            loadNamedProfile,
+            showProfileInactiveMsg,
+        } as any);
+
+        return {
+            getAllProfiles,
+            getCommonApiMock,
+            getTokenTypeName,
+            hasTokenExpiredForProfile,
+            mergeArgsForProfile,
+            profilesGetInstance,
+        };
+    }
+
+    it("returns early if the profile's token is valid", async () => {
+        const blockMocks = getBlockMocks();
+        blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(false);
+        blockMocks.mergeArgsForProfile.mockReturnValueOnce({ knownArgs: [{ argName: "tokenType", argValue: "apimlAuthenticationToken" }] });
+        expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenValid);
+        expect(blockMocks.hasTokenExpiredForProfile).toHaveBeenCalledWith("zosmf");
+    });
+
+    it("returns early if the profile's token is LTPA2 without checking for expiration", async () => {
+        const blockMocks = getBlockMocks();
+        blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(false);
+        blockMocks.getTokenTypeName.mockClear().mockReturnValueOnce("LtpaToken2");
+        expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenUnusedOrUnsupported);
+        expect(blockMocks.hasTokenExpiredForProfile).not.toHaveBeenCalledWith("zosmf");
+    });
+
+    it("returns early if the profile's getTokenTypeName API throws an error (tokens unsupported)", async () => {
+        const blockMocks = getBlockMocks();
+        blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(false);
+        blockMocks.getTokenTypeName.mockClear().mockImplementationOnce(() => {
+            throw new Error("Tokens not supported for this profile");
+        });
+        expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenUnusedOrUnsupported);
+        expect(blockMocks.hasTokenExpiredForProfile).not.toHaveBeenCalledWith("zosmf");
+    });
+
+    it("returns early if the profile's API does not support tokens", async () => {
+        const blockMocks = getBlockMocks(false);
+        blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(false);
+        blockMocks.getTokenTypeName.mockClear().mockReturnValueOnce(undefined);
+        expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenUnusedOrUnsupported);
+        expect(blockMocks.hasTokenExpiredForProfile).not.toHaveBeenCalledWith("zosmf");
+    });
+
+    describe("JWT token expired", () => {
+        it("prompts user to log in and returns valid if successful", async () => {
+            const blockMocks = getBlockMocks();
+            blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(true);
+            const promptForSsoLogin = jest.spyOn(AuthUtils, "promptForSsoLogin").mockResolvedValueOnce(true);
+            expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenValid);
+            expect(blockMocks.hasTokenExpiredForProfile).toHaveBeenCalledWith("zosmf");
+            expect(promptForSsoLogin).toHaveBeenCalled();
+        });
+
+        it("prompts user to log in and returns expired if user dismisses login prompt", async () => {
+            const blockMocks = getBlockMocks();
+            blockMocks.hasTokenExpiredForProfile.mockReturnValueOnce(true);
+            const promptForSsoLogin = jest.spyOn(AuthUtils, "promptForSsoLogin").mockResolvedValueOnce(false);
+            expect(await (ZoweTreeProvider as any).checkJwtForProfile("zosmf")).toBe(JwtCheckResult.TokenExpired);
+            expect(blockMocks.hasTokenExpiredForProfile).toHaveBeenCalledWith("zosmf");
+            expect(promptForSsoLogin).toHaveBeenCalled();
+        });
+    });
+});
+
+describe("Tree Provider Unit Tests - function updateSessionContext", () => {
+    function getBlockMocks() {
+        const profile = createIProfile();
+        const session = createISession();
+        const sessionNodes = {
+            ds: createDatasetSessionNode(session, profile),
+            uss: createUSSSessionNode(session, profile),
+            job: createJobSessionNode(session, profile),
+        };
+        const sharedProviders = {
+            ds: { setStatusForSession: jest.fn(), mSessionNodes: [sessionNodes.ds] } as any,
+            uss: { setStatusForSession: jest.fn(), mSessionNodes: [sessionNodes.uss] } as any,
+            job: { setStatusForSession: jest.fn(), mSessionNodes: [sessionNodes.job] } as any,
+        };
+        return {
+            profile,
+            session,
+            sessionNodes,
+            sharedProviders,
+            sharedProviderMock: jest.spyOn(SharedTreeProviders, "providers", "get").mockReturnValueOnce(sharedProviders),
+        };
+    }
+
+    it("updates the session context across all shared tree providers", async () => {
+        const blockMocks = getBlockMocks();
+        const globalMocks = await createGlobalMocks();
+        globalMocks.mockLoadNamedProfile.mockReturnValue(blockMocks.profile);
+        (ZoweTreeProvider as any).updateSessionContext(blockMocks.profile.name, Validation.ValidationType.VALID);
+        expect(blockMocks.sharedProviders.ds.setStatusForSession).toHaveBeenCalledWith(blockMocks.sessionNodes.ds, Validation.ValidationType.VALID);
+        expect(blockMocks.sharedProviders.uss.setStatusForSession).toHaveBeenCalledWith(blockMocks.sessionNodes.uss, Validation.ValidationType.VALID);
+        expect(blockMocks.sharedProviders.job.setStatusForSession).toHaveBeenCalledWith(blockMocks.sessionNodes.job, Validation.ValidationType.VALID);
+    });
+});
+
+describe("Tree Provider Unit Tests - function setStatusInSession", () => {
+    function getBlockMocks() {
+        const profile = createIProfile();
+        const session = createISession();
+        const nodeDataChanged = jest.spyOn(ZoweTreeProvider.prototype, "nodeDataChanged").mockImplementation();
+        const treeProvider = new ZoweTreeProvider(PersistenceSchemaEnum.Dataset, createDatasetFavoritesNode());
+        return {
+            nodeDataChanged,
+            profile,
+            session,
+            sessionNode: createDatasetSessionNode(session, profile),
+            treeProvider,
+        };
+    }
+
+    it("updates the session context - VALID", () => {
+        const { treeProvider, ...blockMocks } = getBlockMocks();
+        (treeProvider as any).setStatusForSession(blockMocks.sessionNode, Validation.ValidationType.VALID);
+        expect(blockMocks.sessionNode.contextValue).toContain(Constants.ACTIVE_CONTEXT);
+        expect(blockMocks.nodeDataChanged).toHaveBeenCalled();
+    });
+    it("updates the session context - INVALID", () => {
+        const { treeProvider, ...blockMocks } = getBlockMocks();
+        (treeProvider as any).setStatusForSession(blockMocks.sessionNode, Validation.ValidationType.INVALID);
+        expect(blockMocks.sessionNode.contextValue).toContain(Constants.INACTIVE_CONTEXT);
+        expect(blockMocks.nodeDataChanged).toHaveBeenCalled();
+    });
+    it("updates the session context - UNVERIFIED", () => {
+        const { treeProvider, ...blockMocks } = getBlockMocks();
+        (treeProvider as any).setStatusForSession(blockMocks.sessionNode, Validation.ValidationType.UNVERIFIED);
+        expect(blockMocks.sessionNode.contextValue).toContain(Constants.UNVERIFIED_CONTEXT);
+        expect(blockMocks.nodeDataChanged).toHaveBeenCalled();
+    });
+    it("returns early when a falsy node is provided", () => {
+        const { treeProvider } = getBlockMocks();
+        const getIconByIdMock = jest.spyOn(IconGenerator, "getIconById").mockClear().mockImplementation();
+        (treeProvider as any).setStatusForSession(null, Validation.ValidationType.VALID);
+        expect(getIconByIdMock).not.toHaveBeenCalled();
+    });
+});

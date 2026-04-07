@@ -14,6 +14,7 @@ import preact from "@preact/preset-vite";
 import * as path from "path";
 import { readdirSync } from "fs";
 import checker from "vite-plugin-checker";
+import { viteStaticCopy } from "vite-plugin-static-copy";
 
 // https://vitejs.dev/config/
 
@@ -40,9 +41,35 @@ export default defineConfig({
         checker({
             typescript: true,
         }),
+        viteStaticCopy({
+            targets: [
+                {
+                    src: "../../../node_modules/@vscode/codicons/dist/codicon.css",
+                    dest: "codicons/",
+                },
+                {
+                    src: "../../../node_modules/@vscode/codicons/dist/codicon.ttf",
+                    dest: "codicons/",
+                },
+                {
+                    src: "../../../release-notes.md",
+                    dest: "resources/",
+                },
+                {
+                    src: "../../../resources/release-notes/*",
+                    dest: "resources/release-notes/",
+                },
+                {
+                    src: "release-notes/resources/*",
+                    dest: "resources/",
+                },
+            ],
+        }),
     ],
     root: path.resolve(__dirname, "src"),
     build: {
+        chunkSizeWarningLimit: 1000,
+        cssCodeSplit: false,
         emptyOutDir: true,
         outDir: path.resolve(__dirname, "dist"),
         rollupOptions: {
@@ -50,8 +77,17 @@ export default defineConfig({
             output: {
                 entryFileNames: `[name]/[name].js`,
                 chunkFileNames: `[name]/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
+                assetFileNames: `[name]/[name].[ext]`,
+                manualChunks: {
+                    "ag-grid-react": ["ag-grid-react"],
+                },
             },
+        },
+    },
+    resolve: {
+        alias: {
+            react: "preact/compat",
+            "react-dom": "preact/compat",
         },
     },
 });

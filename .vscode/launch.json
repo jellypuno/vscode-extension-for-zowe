@@ -6,7 +6,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Zowe Explorer VS Code Extension",
+      "name": "Run VS Code Extension",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -18,22 +18,7 @@
       "envFile": "${workspaceFolder}/.vscode/.env"
     },
     {
-      // TODO: This launch-configuration should be updated to run the Theia container locally
-      //       and run through a single suite of tests (Firefox or Chrome)
-      "name": "Run Zowe Explorer VS Code Extension (Theia)",
-      "type": "extensionHost",
-      "request": "launch",
-      "runtimeExecutable": "${execPath}",
-      "args": [
-        "--verbose",
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/zowe-explorer",
-        "--extensionTestsPath=${workspaceFolder}/packages/zowe-explorer/out/__tests__/__theia__/index"
-      ],
-      "outFiles": ["${workspaceFolder}/packages/zowe-explorer/out/**/*.js"],
-      "smartStep": true
-    },
-    {
-      "name": "Run Zowe Explorer FTP VS Code Extension",
+      "name": "Run FTP VS Code Extension",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
@@ -45,25 +30,78 @@
     },
     {
       "type": "node",
-      "name": "Zowe Explorer Unit Tests (Jest)",
+      "name": "Unit Tests (Jest)",
       "request": "launch",
-      "program": "${workspaceFolder}/node_modules/yarn/bin/yarn.js",
-      "args": ["run", "test"],
-      "cwd": "${workspaceFolder}",
+      "runtimeArgs": ["--inspect-brk", "${workspaceFolder}/node_modules/jest/bin/jest", "-i"],
+      "cwd": "${workspaceFolder}/packages/zowe-explorer",
       "console": "integratedTerminal",
-      "internalConsoleOptions": "neverOpen",
-      "smartStep": true,
-      "skipFiles": ["<node_internals>/**"]
+      "sourceMaps": true
     },
     {
-      "name": "Zowe Explorer Integration Tests (Mocha)",
+      "type": "node",
+      "name": "Current Unit Tests (Jest)",
+      "request": "launch",
+      "runtimeArgs": ["--inspect-brk", "${workspaceFolder}/node_modules/jest/bin/jest", "-i", "${fileBasenameNoExtension}"],
+      "cwd": "${workspaceFolder}/packages/zowe-explorer",
+      "console": "integratedTerminal",
+      "sourceMaps": true
+    },
+    {
+      "type": "node",
+      "name": "API Unit Tests (Jest)",
+      "request": "launch",
+      "runtimeArgs": ["--inspect-brk", "${workspaceFolder}/node_modules/jest/bin/jest", "-i"],
+      "cwd": "${workspaceFolder}/packages/zowe-explorer-api",
+      "console": "integratedTerminal",
+      "sourceMaps": true
+    },
+    {
+      "type": "node",
+      "name": "Current API Unit Tests (Jest)",
+      "request": "launch",
+      "runtimeArgs": ["--inspect-brk", "${workspaceFolder}/node_modules/jest/bin/jest", "-i", "${fileBasenameNoExtension}"],
+      "cwd": "${workspaceFolder}/packages/zowe-explorer-api",
+      "console": "integratedTerminal",
+      "sourceMaps": true
+    },
+    {
+      "type": "node",
+      "name": "FTP Unit Tests (Jest)",
+      "request": "launch",
+      "runtimeArgs": ["--inspect-brk", "${workspaceFolder}/node_modules/jest/bin/jest", "-i"],
+      "cwd": "${workspaceFolder}/packages/zowe-explorer-ftp-extension",
+      "console": "integratedTerminal",
+      "sourceMaps": true
+    },
+    {
+      "type": "node",
+      "name": "End-to-end Tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeVersion": "20",
+      "runtimeArgs": ["test:e2e"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/packages/zowe-explorer"
+    },
+    {
+      "type": "node",
+      "name": "BDD Integration Tests (Cucumber)",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeVersion": "20",
+      "runtimeArgs": ["test:integration"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/packages/zowe-explorer"
+    },
+    {
       "type": "extensionHost",
+      "name": "TDD Integration Tests (Mocha)",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "args": [
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/packages/zowe-explorer",
-        "--extensionTestsPath=${workspaceFolder}/packages/zowe-explorer/out/__tests__/__integration__/index"
+        "--extensionTestsPath=${workspaceFolder}/packages/zowe-explorer/out/__tests__/__integration__/tdd/index"
       ],
       "outFiles": ["${workspaceFolder}/out/__tests__/**/*.js"],
       "preLaunchTask": "Build",

@@ -10,7 +10,9 @@
  */
 
 export * from "./sorting";
-export * from "./ZoweExplorerTreeApi";
+export * from "./IZoweExplorerTreeApi";
 export * from "./ZoweTreeNode";
-export * from "./IZoweTree";
 export * from "./IZoweTreeNode";
+export * from "./IZoweTree";
+export * from "./pagination";
+export * from "./ZoweNodeActions";

@@ -3,16 +3,18 @@ name: Zowe Explorer Auto Responder for New Issues
 on:
   issues:
     types: labeled
+permissions:
+  issues: write
 
 jobs:
   processLabelAction:
     name: Process Label Action
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Process Label Action
-        uses: hramos/respond-to-issue-based-on-label@v2
+        uses: dessant/label-actions@v4
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          configuration-path: '.github/label-actions.yml'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: '.github/label-actions.yml'

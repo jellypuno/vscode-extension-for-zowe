@@ -9,21 +9,21 @@
  *
  */
 
-import * as vscode from "vscode";
-import { imperative } from "@zowe/cli";
+import * as imperative from "@zowe/imperative";
 import { ProfilesCache } from "../profiles";
-import { KeytarCredentialManager, KeytarModule } from "./KeytarCredentialManager";
-import * as globals from "../globals";
-
+import { KeytarCredentialManager } from "./KeytarCredentialManager";
+import { Types } from "../Types";
+import { Constants } from "../globals";
+import { ZoweVsCodeExtension } from "../vscode";
 export class KeytarApi {
     public constructor(protected log: imperative.Logger) {}
 
     // v1 specific
-    public async activateKeytar(initialized: boolean, _isTheia: boolean): Promise<void> {
+    public async activateKeytar(initialized: boolean): Promise<void> {
         const log = imperative.Logger.getAppLogger();
-        const profiles = new ProfilesCache(log, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
-        const scsActive = profiles.isSecureCredentialPluginActive();
-        if (scsActive) {
+        const profiles = new ProfilesCache(log, ZoweVsCodeExtension.workspaceRoot?.uri.fsPath);
+        const isSecure = await profiles.isCredentialsSecured();
+        if (isSecure) {
             let keytar: object;
             try {
                 keytar = (await import("@zowe/secrets-for-zowe-sdk")).keyring;
@@ -31,11 +31,11 @@ export class KeytarApi {
                 log.warn(err.toString());
             }
             if (!initialized && keytar) {
-                KeytarCredentialManager.keytar = keytar as KeytarModule;
+                KeytarCredentialManager.keytar = keytar as Types.KeytarModule;
                 await imperative.CredentialManagerFactory.initialize({
-                    service: globals.SETTINGS_SCS_DEFAULT,
+                    service: Constants.SETTINGS_SCS_DEFAULT,
                     Manager: KeytarCredentialManager,
-                    displayName: globals.ZOWE_EXPLORER,
+                    displayName: Constants.ZOWE_EXPLORER,
                 });
             }
         }

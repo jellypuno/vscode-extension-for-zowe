@@ -10,10 +10,10 @@
  */
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { imperative } from "@zowe/cli";
-import { FTPConfig, IZosFTPProfile } from "@zowe/zos-ftp-for-zowe-cli";
-import { ZoweExplorerApi } from "@zowe/zowe-explorer-api";
-import { sessionMap } from "./extension";
+import { FTPConfig, zosNodeAccessor } from "@zowe/zos-ftp-for-zowe-cli";
+import * as crypto from "crypto";
+import { imperative, MainframeInteraction } from "@zowe/zowe-explorer-api";
+import * as globals from "./globals";
 import { FtpSession } from "./ftpSession";
 import { ZoweFtpExtensionError } from "./ZoweFtpExtensionError";
 
@@ -21,7 +21,7 @@ export interface ConnectionType {
     close(): void;
 }
 
-export abstract class AbstractFtpApi implements ZoweExplorerApi.ICommon {
+export abstract class AbstractFtpApi implements MainframeInteraction.ICommon {
     private session?: FtpSession;
 
     public constructor(public profile?: imperative.IProfileLoaded) {}
@@ -31,23 +31,31 @@ export abstract class AbstractFtpApi implements ZoweExplorerApi.ICommon {
     }
 
     public getSession(profile?: imperative.IProfileLoaded): FtpSession {
-        this.session = sessionMap.get(this.profile);
-        if (!this.session) {
-            const ftpProfile = (profile || this.profile)?.profile;
-            if (!ftpProfile) {
-                throw new ZoweFtpExtensionError("Internal error: ZoweVscFtpRestApi instance was not initialized with a valid Zowe profile.");
-            }
+        const ftpProfile = profile ?? this.profile;
+        if (ftpProfile == null) {
+            throw new ZoweFtpExtensionError("Internal error: AbstractFtpApi instance was not initialized with a valid Zowe profile.");
+        }
 
+        this.session = globals.SESSION_MAP.get(ftpProfile);
+        const loadedProfile = ftpProfile.profile;
+        if (this.session == null && loadedProfile != null) {
             this.session = new FtpSession({
-                hostname: ftpProfile.host,
-                port: ftpProfile.port,
-                user: ftpProfile.user,
-                password: ftpProfile.password,
-                rejectUnauthorized: ftpProfile.rejectUnauthorized,
+                hostname: loadedProfile.host,
+                port: loadedProfile.port,
+                user: loadedProfile.user,
+                password: loadedProfile.password,
+                rejectUnauthorized: loadedProfile.rejectUnauthorized,
+                type: loadedProfile.user && loadedProfile.password ? "basic" : "none",
             });
-            sessionMap.set(this.profile, this.session);
+            globals.SESSION_MAP.set(ftpProfile, this.session);
         }
         return this.session;
+    }
+
+    protected hashBuffer(buffer: Buffer): string {
+        const hash = crypto.createHash("sha256");
+        hash.update(buffer);
+        return hash.digest("hex");
     }
 
     public getProfileTypeName(): string {
@@ -56,13 +64,13 @@ export abstract class AbstractFtpApi implements ZoweExplorerApi.ICommon {
 
     public checkedProfile(): imperative.IProfileLoaded {
         if (!this.profile?.profile) {
-            throw new ZoweFtpExtensionError("Internal error: ZoweVscFtpRestApi instance was not initialized with a valid Zowe profile.");
+            throw new ZoweFtpExtensionError("Internal error: AbstractFtpApi instance was not initialized with a valid Zowe profile.");
         }
         return this.profile;
     }
 
-    public ftpClient(profile: imperative.IProfileLoaded): Promise<unknown> {
-        const ftpProfile = profile.profile as IZosFTPProfile;
+    public ftpClient(profile: imperative.IProfileLoaded): Promise<zosNodeAccessor.ZosAccessor> {
+        const ftpProfile = profile.profile as imperative.ICommandArguments;
         return FTPConfig.connectFromArguments(ftpProfile);
     }
 
@@ -74,10 +82,10 @@ export abstract class AbstractFtpApi implements ZoweExplorerApi.ICommon {
     }
 
     public logout(_session): Promise<void> {
-        const ftpsession = sessionMap.get(this.profile);
+        const ftpsession = globals.SESSION_MAP.get(this.profile);
         if (ftpsession !== undefined) {
             ftpsession.releaseConnections();
-            sessionMap.delete(this.profile);
+            globals.SESSION_MAP.delete(this.profile);
         }
         return;
     }
@@ -89,11 +97,14 @@ export abstract class AbstractFtpApi implements ZoweExplorerApi.ICommon {
             try {
                 sessionStatus = await this.ftpClient(this.checkedProfile());
             } catch (e) {
-                const imperativeError = new imperative.ImperativeError({
-                    msg: "Rest API failure with HTTP(S) status 401 Authentication error.",
-                    errorCode: `${imperative.RestConstants.HTTP_STATUS_401}`,
-                });
-                throw imperativeError;
+                if (e instanceof Error && e.message.includes("PASS command failed")) {
+                    const imperativeError = new imperative.ImperativeError({
+                        msg: "Rest API failure with HTTP(S) status 401 Username or password are not valid or expired",
+                        errorCode: `${imperative.RestConstants.HTTP_STATUS_401}`,
+                    });
+                    throw imperativeError;
+                }
+                throw e;
             }
             if (sessionStatus) {
                 return "active";

@@ -9,378 +9,558 @@
  *
  */
 
-import * as zowe from "@zowe/cli";
-import { ZoweExplorerApi } from "./ZoweExplorerApi";
-import { FileAttributes, permStringToOctal } from "../utils/files";
+import { Login, Logout } from "@zowe/core-for-zowe-sdk";
+import * as imperative from "@zowe/imperative";
+import * as zosconsole from "@zowe/zos-console-for-zowe-sdk";
+import * as zosfiles from "@zowe/zos-files-for-zowe-sdk";
+import * as zosjobs from "@zowe/zos-jobs-for-zowe-sdk";
+import * as zostso from "@zowe/zos-tso-for-zowe-sdk";
+import * as zosuss from "@zowe/zos-uss-for-zowe-sdk";
+import * as zosmf from "@zowe/zosmf-for-zowe-sdk";
+import { MainframeInteraction } from "../extend/MainframeInteraction";
+import { FileManagement } from "../utils";
+import { Types } from "../Types";
+import { ProfilesCache } from "../profiles/ProfilesCache";
+import { VscSettings } from "../vscode/doc/VscSettings";
+import { IZosmfListResponse, IZosFilesResponse } from "@zowe/zos-files-for-zowe-sdk";
+import { IDataSetCount } from "../dataset/IDataSetCount";
 
 /**
- * An implementation of the Zowe Explorer API Common interface for zOSMF.
- */
-class ZosmfApiCommon implements ZoweExplorerApi.ICommon {
-    public static getProfileTypeName(): string {
-        return zowe.ZosmfProfile.type;
-    }
+ * Implementations of Zowe Explorer API for z/OSMF profiles
+ */ export namespace ZoweExplorerZosmf {
+    /**
+     * An implementation of the Zowe Explorer API Common interface for zOSMF.
+     */
+    export class CommonApi implements MainframeInteraction.ICommon {
+        public static getProfileTypeName(): string {
+            return zosmf.ZosmfProfile.type;
+        }
 
-    private session: zowe.imperative.Session;
-    public constructor(public profile?: zowe.imperative.IProfileLoaded) {}
+        private session: imperative.Session;
+        public constructor(public profile?: imperative.IProfileLoaded) {}
 
-    public getProfileTypeName(): string {
-        return ZosmfApiCommon.getProfileTypeName();
-    }
+        public getProfileTypeName(): string {
+            return CommonApi.getProfileTypeName();
+        }
 
-    public getSessionFromCommandArgument(cmdArgs: zowe.imperative.ICommandArguments): zowe.imperative.Session {
-        const sessCfg = zowe.ZosmfSession.createSessCfgFromArgs(cmdArgs);
-        zowe.imperative.ConnectionPropsForSessCfg.resolveSessCfgProps(sessCfg, cmdArgs);
-        const sessionToUse = new zowe.imperative.Session(sessCfg);
-        return sessionToUse;
-    }
+        public getSessionFromCommandArgument(cmdArgs: imperative.ICommandArguments): imperative.Session {
+            const sessCfg = zosmf.ZosmfSession.createSessCfgFromArgs(cmdArgs);
+            imperative.ConnectionPropsForSessCfg.resolveSessCfgProps(sessCfg, cmdArgs);
+            const sessionToUse = new imperative.Session(sessCfg);
+            sessionToUse.ISession.socketConnectTimeout = VscSettings.getDirectValue(
+                "zowe.settings.socketConnectTimeout",
+                sessionToUse.ISession.socketConnectTimeout
+            );
+            sessionToUse.ISession.requestCompletionTimeout = VscSettings.getDirectValue(
+                "zowe.settings.requestTimeout",
+                sessionToUse.ISession.requestCompletionTimeout
+            );
+            return ProfilesCache.getProfileSessionWithVscProxy(sessionToUse);
+        }
 
-    public getSession(profile?: zowe.imperative.IProfileLoaded): zowe.imperative.Session {
-        if (!this.session) {
+        public getSession(profile?: imperative.IProfileLoaded): imperative.Session {
             try {
                 this.session = this._getSession(profile || this.profile);
             } catch (error) {
                 // todo: initialize and use logging
-                zowe.imperative.Logger.getAppLogger().error(error as string);
+                imperative.Logger.getAppLogger().error(error as string);
             }
+            return this.session ? ProfilesCache.getProfileSessionWithVscProxy(this.session) : undefined;
         }
-        return this.session;
-    }
 
-    private _getSession(serviceProfile: zowe.imperative.IProfileLoaded): zowe.imperative.Session {
-        let cmdArgs: zowe.imperative.ICommandArguments = {
-            $0: "zowe",
-            _: [""],
-            host: serviceProfile.profile.host as string,
-            port: serviceProfile.profile.port as number,
-            basePath: serviceProfile.profile.basePath as string,
-            rejectUnauthorized: serviceProfile.profile.rejectUnauthorized as boolean,
-        };
-        if (!serviceProfile.profile.tokenValue) {
-            cmdArgs = {
-                ...cmdArgs,
-                user: serviceProfile.profile.user as string,
-                password: serviceProfile.profile.password as string,
+        public static getCommandArgs(profile: imperative.IProfileLoaded): imperative.ICommandArguments {
+            const cmdArgs: imperative.ICommandArguments = {
+                $0: "zowe",
+                _: [""],
+                ...profile.profile,
             };
-        } else {
-            cmdArgs = {
-                ...cmdArgs,
-                tokenType: serviceProfile.profile.tokenType as string,
-                tokenValue: serviceProfile.profile.tokenValue as string,
-            };
+            return cmdArgs;
         }
-        return this.getSessionFromCommandArgument(cmdArgs);
-    }
+        private _getSession(serviceProfile: imperative.IProfileLoaded): imperative.Session {
+            const cmdArgs = CommonApi.getCommandArgs(serviceProfile);
+            return this.getSessionFromCommandArgument(cmdArgs);
+        }
 
-    public async getStatus(validateProfile?: zowe.imperative.IProfileLoaded, profileType?: string): Promise<string> {
-        // This API call is specific for z/OSMF profiles
-        if (profileType === "zosmf") {
-            const validateSession = this._getSession(validateProfile);
-            const sessionStatus = await zowe.CheckStatus.getZosmfInfo(validateSession);
+        public async getStatus(validateProfile?: imperative.IProfileLoaded, profileType?: string): Promise<string> {
+            // This API call is specific for z/OSMF profiles
+            if (profileType === "zosmf") {
+                const validateSession = this._getSession(validateProfile);
+                const sessionStatus = await zosmf.CheckStatus.getZosmfInfo(validateSession);
 
-            if (sessionStatus) {
-                return "active";
+                if (sessionStatus) {
+                    return "active";
+                } else {
+                    return "inactive";
+                }
             } else {
-                return "inactive";
+                return "unverified";
             }
-        } else {
-            return "unverified";
         }
-    }
 
-    public getTokenTypeName(): string {
-        return zowe.imperative.SessConstants.TOKEN_TYPE_APIML;
-    }
+        public getTokenTypeName(): string {
+            return imperative.SessConstants.TOKEN_TYPE_APIML;
+        }
 
-    public login(session: zowe.imperative.Session): Promise<string> {
-        return zowe.Login.apimlLogin(session);
-    }
+        public login(session: imperative.Session): Promise<string> {
+            return Login.apimlLogin(session);
+        }
 
-    public logout(session: zowe.imperative.Session): Promise<void> {
-        return zowe.Logout.apimlLogout(session);
-    }
-}
-
-/**
- * An implementation of the Zowe Explorer USS API interface for zOSMF.
- */
-export class ZosmfUssApi extends ZosmfApiCommon implements ZoweExplorerApi.IUss {
-    public fileList(ussFilePath: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.List.fileList(this.getSession(), ussFilePath);
-    }
-
-    public isFileTagBinOrAscii(ussFilePath: string): Promise<boolean> {
-        return zowe.Utilities.isFileTagBinOrAscii(this.getSession(), ussFilePath);
-    }
-
-    public getContents(inputFilePath: string, options: zowe.IDownloadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Download.ussFile(this.getSession(), inputFilePath, options);
-    }
-
-    public copy(outputPath: string, options?: Omit<object, "request">): Promise<Buffer> {
-        return zowe.Utilities.putUSSPayload(this.getSession(), outputPath, { ...(options ?? {}), request: "copy" });
+        public logout(session: imperative.Session): Promise<void> {
+            return Logout.apimlLogout(session);
+        }
     }
 
     /**
-     * API method to wrap to the newer `putContent`.
-     * @deprecated
+     * An implementation of the Zowe Explorer USS API interface for zOSMF.
      */
-    public putContents(
-        inputFilePath: string,
-        ussFilePath: string,
-        binary?: boolean,
-        localEncoding?: string,
-        etag?: string,
-        returnEtag?: boolean
-    ): Promise<zowe.IZosFilesResponse> {
-        return this.putContent(inputFilePath, ussFilePath, {
-            binary,
-            localEncoding,
-            etag,
-            returnEtag,
-        });
-    }
+    export class UssApi extends CommonApi implements MainframeInteraction.IUss {
+        public fileList(ussFilePath: string, options?: zosfiles.IUSSListOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.List.fileList(this.getSession(), ussFilePath, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
 
-    public putContent(inputFilePath: string, ussFilePath: string, options: zowe.IUploadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Upload.fileToUssFile(this.getSession(), inputFilePath, ussFilePath, options);
-    }
+        public isFileTagBinOrAscii(ussFilePath: string): Promise<boolean> {
+            return zosfiles.Utilities.isFileTagBinOrAscii(this.getSession(), ussFilePath);
+        }
 
-    public async updateAttributes(ussPath: string, attributes: Partial<FileAttributes>): Promise<zowe.IZosFilesResponse> {
-        try {
-            if (attributes.tag) {
-                await zowe.Utilities.putUSSPayload(this.getSession(), ussPath, {
-                    request: "chtag",
-                    action: "set",
-                    type: "text",
-                    codeset: attributes.tag !== null ? attributes.tag.toString() : attributes.tag,
-                });
+        public getContents(inputFilePath: string, options: zosfiles.IDownloadSingleOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Download.ussFile(this.getSession(), inputFilePath, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public downloadDirectory(
+            ussDirectoryPath: string,
+            fileOptions?: zosfiles.IDownloadOptions,
+            listOptions?: zosfiles.IUSSListOptions
+        ): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Download.ussDir(
+                this.getSession(),
+                ussDirectoryPath,
+                {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...fileOptions,
+                },
+                listOptions
+            );
+        }
+
+        public copy(outputPath: string, options?: Omit<object, "request">): Promise<Buffer> {
+            return zosfiles.Utilities.putUSSPayload(this.getSession(), outputPath, { ...options, request: "copy" });
+        }
+
+        public async move(oldPath: string, newPath: string): Promise<void> {
+            await zosfiles.Utilities.putUSSPayload(this.getSession(), newPath, {
+                request: "move",
+                from: oldPath,
+            });
+        }
+
+        public uploadFromBuffer(buffer: Buffer, filePath: string, options?: zosfiles.IUploadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.bufferToUssFile(this.getSession(), filePath, buffer, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public putContent(inputFilePath: string, ussFilePath: string, options: zosfiles.IUploadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.fileToUssFile(this.getSession(), inputFilePath, ussFilePath, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public async updateAttributes(ussPath: string, attributes: Partial<Types.FileAttributes>): Promise<zosfiles.IZosFilesResponse> {
+            try {
+                if (attributes.tag) {
+                    await zosfiles.Utilities.putUSSPayload(this.getSession(), ussPath, {
+                        request: "chtag",
+                        action: "set",
+                        type: "text",
+                        codeset: attributes.tag !== null ? attributes.tag.toString() : attributes.tag,
+                    });
+                }
+                if ((attributes.group || attributes.gid) && (attributes.owner || attributes.uid)) {
+                    await zosfiles.Utilities.putUSSPayload(this.getSession(), ussPath, {
+                        request: "chown",
+                        owner: attributes.uid != null ? attributes.uid.toString() : attributes.owner,
+                        group: attributes.gid != null ? attributes.gid.toString() : attributes.group,
+                        recursive: true,
+                    });
+                } else if (attributes.owner || attributes.uid) {
+                    await zosfiles.Utilities.putUSSPayload(this.getSession(), ussPath, {
+                        request: "chown",
+                        owner: attributes.uid != null ? attributes.uid.toString() : attributes.owner,
+                        recursive: true,
+                    });
+                }
+                if (attributes.perms) {
+                    await zosfiles.Utilities.putUSSPayload(this.getSession(), ussPath, {
+                        request: "chmod",
+                        mode: FileManagement.permStringToOctal(attributes.perms).toString(),
+                    });
+                }
+            } catch (err) {
+                const message = err instanceof Error ? err.toString() : "N/A";
+                return {
+                    success: false,
+                    commandResponse: message,
+                    errorMessage: message,
+                };
             }
-            if ((attributes.group || attributes.gid) && (attributes.owner || attributes.uid)) {
-                await zowe.Utilities.putUSSPayload(this.getSession(), ussPath, {
-                    request: "chown",
-                    owner: attributes.uid != null ? attributes.uid.toString() : attributes.owner,
-                    group: attributes.gid != null ? attributes.gid.toString() : attributes.group,
-                    recursive: true,
-                });
-            } else if (attributes.owner || attributes.uid) {
-                await zowe.Utilities.putUSSPayload(this.getSession(), ussPath, {
-                    request: "chown",
-                    owner: attributes.uid != null ? attributes.uid.toString() : attributes.owner,
-                    recursive: true,
-                });
-            }
-            if (attributes.perms) {
-                await zowe.Utilities.putUSSPayload(this.getSession(), ussPath, {
-                    request: "chmod",
-                    mode: permStringToOctal(attributes.perms).toString(),
-                });
-            }
-        } catch (err) {
-            const message = err instanceof Error ? err.toString() : "N/A";
+
             return {
-                success: false,
-                commandResponse: message,
-                errorMessage: message,
+                success: true,
+                commandResponse: "The provided attributes were applied.",
             };
         }
 
-        return {
-            success: true,
-            commandResponse: "The provided attributes were applied.",
-        };
-    }
-
-    public uploadDirectory(inputDirectoryPath: string, ussDirectoryPath: string, options?: zowe.IUploadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Upload.dirToUSSDirRecursive(this.getSession(), inputDirectoryPath, ussDirectoryPath, options);
-    }
-
-    public create(ussPath: string, type: string, mode?: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.Create.uss(this.getSession(), ussPath, type, mode);
-    }
-
-    public delete(ussPath: string, recursive?: boolean): Promise<zowe.IZosFilesResponse> {
-        // handle zosmf api issue with file paths
-        const fixedName = ussPath.startsWith("/") ? ussPath.substring(1) : ussPath;
-        return zowe.Delete.ussFile(this.getSession(), fixedName, recursive);
-    }
-
-    public async rename(currentUssPath: string, newUssPath: string): Promise<zowe.IZosFilesResponse> {
-        const result = await zowe.Utilities.renameUSSFile(this.getSession(), currentUssPath, newUssPath);
-        return {
-            success: true,
-            commandResponse: null,
-            apiResponse: result,
-        };
-    }
-
-    public async getTag(ussPath: string): Promise<string> {
-        const response = await zowe.Utilities.putUSSPayload(this.getSession(), ussPath, {
-            request: "chtag",
-            action: "list",
-        });
-        return JSON.parse(response.toString()).stdout[0].split(" ")[1] as string;
-    }
-}
-
-/**
- * An implementation of the Zowe Explorer MVS API interface for zOSMF.
- */
-export class ZosmfMvsApi extends ZosmfApiCommon implements ZoweExplorerApi.IMvs {
-    public dataSet(filter: string, options?: zowe.IListOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.List.dataSet(this.getSession(), filter, options);
-    }
-
-    public allMembers(dataSetName: string, options?: zowe.IListOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.List.allMembers(this.getSession(), dataSetName, options);
-    }
-
-    public getContents(dataSetName: string, options?: zowe.IDownloadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Download.dataSet(this.getSession(), dataSetName, options);
-    }
-
-    public putContents(inputFilePath: string, dataSetName: string, options?: zowe.IUploadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Upload.pathToDataSet(this.getSession(), inputFilePath, dataSetName, options);
-    }
-
-    public createDataSet(
-        dataSetType: zowe.CreateDataSetTypeEnum,
-        dataSetName: string,
-        options?: Partial<zowe.ICreateDataSetOptions>
-    ): Promise<zowe.IZosFilesResponse> {
-        return zowe.Create.dataSet(this.getSession(), dataSetType, dataSetName, options);
-    }
-
-    public createDataSetMember(dataSetName: string, options?: zowe.IUploadOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Upload.bufferToDataSet(this.getSession(), Buffer.from(""), dataSetName, options);
-    }
-
-    public allocateLikeDataSet(dataSetName: string, likeDataSetName: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.Create.dataSetLike(this.getSession(), dataSetName, likeDataSetName);
-    }
-
-    public copyDataSetMember(
-        { dsn: fromDataSetName, member: fromMemberName }: zowe.IDataSet,
-        { dsn: toDataSetName, member: toMemberName }: zowe.IDataSet,
-        options?: zowe.ICopyDatasetOptions
-    ): Promise<zowe.IZosFilesResponse> {
-        let newOptions: zowe.ICopyDatasetOptions;
-        if (options) {
-            if (options["from-dataset"]) {
-                newOptions = options;
-            } else {
-                newOptions = {
-                    ...options,
-                    ...{ "from-dataset": { dsn: fromDataSetName, member: fromMemberName } },
-                };
-            }
-        } else {
-            // If we decide to match 1:1 the Zowe.Copy.dataSet implementation, we will need to break the interface definition in the ZoweExplorerApi
-            newOptions = { "from-dataset": { dsn: fromDataSetName, member: fromMemberName } };
+        public uploadDirectory(
+            inputDirectoryPath: string,
+            ussDirectoryPath: string,
+            options?: zosfiles.IUploadOptions
+        ): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.dirToUSSDirRecursive(this.getSession(), inputDirectoryPath, ussDirectoryPath, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
         }
-        return zowe.Copy.dataSet(this.getSession(), { dsn: toDataSetName, member: toMemberName }, newOptions);
+
+        public create(ussPath: string, type: string, mode?: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Create.uss(this.getSession(), ussPath, type, mode, { responseTimeout: this.profile?.profile?.responseTimeout });
+        }
+
+        public delete(ussPath: string, recursive?: boolean): Promise<zosfiles.IZosFilesResponse> {
+            // handle zosmf api issue with file paths
+            const fixedName = ussPath.startsWith("/") ? ussPath.substring(1) : ussPath;
+            return zosfiles.Delete.ussFile(this.getSession(), fixedName, recursive, { responseTimeout: this.profile?.profile?.responseTimeout });
+        }
+
+        public async rename(currentUssPath: string, newUssPath: string): Promise<zosfiles.IZosFilesResponse> {
+            const result = await zosfiles.Utilities.renameUSSFile(this.getSession(), currentUssPath, newUssPath);
+            return {
+                success: true,
+                commandResponse: null,
+                apiResponse: result,
+            };
+        }
+
+        public async getTag(ussPath: string): Promise<string> {
+            const response = await zosfiles.Utilities.putUSSPayload(this.getSession(), ussPath, {
+                request: "chtag",
+                action: "list",
+            });
+            return JSON.parse(response.toString()).stdout[0].split(" ")[1] as string;
+        }
     }
 
-    public renameDataSet(currentDataSetName: string, newDataSetName: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.Rename.dataSet(this.getSession(), currentDataSetName, newDataSetName);
+    /**
+     * An implementation of the Zowe Explorer MVS API interface for zOSMF.
+     */
+    export class MvsApi extends CommonApi implements MainframeInteraction.IMvs {
+        public dataSet(filter: string, options?: zosfiles.IListOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.List.dataSet(this.getSession(), filter, { responseTimeout: this.profile?.profile?.responseTimeout, ...options });
+        }
+
+        public allMembers(dataSetName: string, options?: zosfiles.IListOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.List.allMembers(this.getSession(), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public getContents(dataSetName: string, options?: zosfiles.IDownloadSingleOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Download.dataSet(this.getSession(), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public downloadAllMembers(dataSetName: string, options?: zosfiles.IDownloadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Download.allMembers(this.getSession(), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public uploadFromBuffer(buffer: Buffer, dataSetName: string, options?: zosfiles.IUploadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.bufferToDataSet(this.getSession(), buffer, dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public putContents(inputFilePath: string, dataSetName: string, options?: zosfiles.IUploadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.pathToDataSet(this.getSession(), inputFilePath, dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public createDataSet(
+            dataSetType: zosfiles.CreateDataSetTypeEnum,
+            dataSetName: string,
+            options?: Partial<zosfiles.ICreateDataSetOptions>
+        ): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Create.dataSet(this.getSession(), dataSetType, dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public createDataSetMember(dataSetName: string, options?: zosfiles.IUploadOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Upload.bufferToDataSet(this.getSession(), Buffer.from(""), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public allocateLikeDataSet(dataSetName: string, likeDataSetName: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Create.dataSetLike(this.getSession(), dataSetName, likeDataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+            });
+        }
+
+        public copyDataSetMember(
+            { dsn: fromDataSetName, member: fromMemberName }: zosfiles.IDataSet,
+            { dsn: toDataSetName, member: toMemberName }: zosfiles.IDataSet,
+            options?: zosfiles.ICopyDatasetOptions
+        ): Promise<zosfiles.IZosFilesResponse> {
+            let newOptions: zosfiles.ICopyDatasetOptions;
+            if (options) {
+                if (options["from-dataset"]) {
+                    newOptions = options;
+                } else {
+                    newOptions = {
+                        ...options,
+                        "from-dataset": { dsn: fromDataSetName, member: fromMemberName },
+                    };
+                }
+            } else {
+                // If we decide to match 1:1 the Zowe.Copy.dataSet implementation,
+                // we will need to break the interface definition in the ZoweExplorerApi
+                newOptions = { "from-dataset": { dsn: fromDataSetName, member: fromMemberName } };
+            }
+            return zosfiles.Copy.dataSet(
+                this.getSession(),
+                { dsn: toDataSetName, member: toMemberName },
+                {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...newOptions,
+                }
+            );
+        }
+
+        public renameDataSet(currentDataSetName: string, newDataSetName: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Rename.dataSet(this.getSession(), currentDataSetName, newDataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+            });
+        }
+
+        public renameDataSetMember(dataSetName: string, oldMemberName: string, newMemberName: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Rename.dataSetMember(this.getSession(), dataSetName, oldMemberName, newMemberName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+            });
+        }
+
+        public hMigrateDataSet(dataSetName: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.HMigrate.dataSet(this.getSession(), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+            });
+        }
+
+        public hRecallDataSet(dataSetName: string): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.HRecall.dataSet(this.getSession(), dataSetName, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+            });
+        }
+
+        public deleteDataSet(dataSetName: string, options?: zosfiles.IDeleteDatasetOptions): Promise<zosfiles.IZosFilesResponse> {
+            if (options?.volume === "*VSAM*") {
+                return zosfiles.Delete.vsam(this.getSession(), dataSetName, {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...options,
+                });
+            } else {
+                return zosfiles.Delete.dataSet(this.getSession(), dataSetName, {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...options,
+                });
+            }
+        }
+
+        public dataSetsMatchingPattern(filter: string[], options?: zosfiles.IDsmListOptions): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.List.dataSetsMatchingPattern(this.getSession(), filter, {
+                responseTimeout: this.profile?.profile?.responseTimeout,
+                ...options,
+            });
+        }
+
+        public copyDataSet(fromDataSetName: string, toDataSetName: string, enq?: string, replace?: boolean): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Copy.dataSet(
+                this.getSession(),
+                { dsn: toDataSetName },
+                { "from-dataset": { dsn: fromDataSetName }, enq, replace, responseTimeout: this.profile?.profile?.responseTimeout }
+            );
+        }
+        public searchDataSets(searchOptions: zosfiles.ISearchOptions): Promise<zosfiles.ISearchResponse> {
+            return zosfiles.Search.dataSets(this.getSession(), {
+                ...searchOptions,
+                getOptions: {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...searchOptions.getOptions,
+                },
+                listOptions: {
+                    responseTimeout: this.profile?.profile?.responseTimeout,
+                    ...searchOptions.listOptions,
+                },
+            });
+        }
+
+        public async copyDataSetCrossLpar(
+            toDataSetName: string,
+            toMemberName: string,
+            options: zosfiles.ICrossLparCopyDatasetOptions,
+            sourceprofile: imperative.IProfileLoaded
+        ): Promise<zosfiles.IZosFilesResponse> {
+            return zosfiles.Copy.dataSetCrossLPAR(
+                this.getSession(sourceprofile),
+                { dsn: toDataSetName, member: toMemberName },
+                options,
+                {},
+                this.getSession()
+            );
+        }
+
+        public async getCount(dataSetPatterns: string[]): Promise<IDataSetCount> {
+            const response: IZosFilesResponse[] = [];
+            response.push(await this.dataSetsMatchingPattern(dataSetPatterns, { attributes: false }));
+            const allDatasets = response
+                .filter((r) => r.success)
+                .reduce((arr: Set<string>, r) => {
+                    const responseItems: IZosmfListResponse[] = Array.isArray(r.apiResponse) ? r.apiResponse : r.apiResponse?.items;
+                    responseItems?.forEach((item) => arr.add(item.dsname));
+                    return arr;
+                }, new Set<string>());
+            return { count: allDatasets.size, lastItem: Array.from(allDatasets).pop() };
+        }
     }
 
-    public renameDataSetMember(dataSetName: string, oldMemberName: string, newMemberName: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.Rename.dataSetMember(this.getSession(), dataSetName, oldMemberName, newMemberName);
+    /**
+     * An implementation of the Zowe Explorer JES API interface for zOSMF.
+     */
+    export class JesApi extends CommonApi implements MainframeInteraction.IJes {
+        public getJobsByParameters(params: zosjobs.IGetJobsParms): Promise<zosjobs.IJob[]> {
+            return zosjobs.GetJobs.getJobsByParameters(this.getSession(), params);
+        }
+
+        public getJob(jobid: string): Promise<zosjobs.IJob> {
+            return zosjobs.GetJobs.getJob(this.getSession(), jobid);
+        }
+
+        public getSpoolFiles(jobname: string, jobid: string): Promise<zosjobs.IJobFile[]> {
+            return zosjobs.GetJobs.getSpoolFiles(this.getSession(), jobname, jobid);
+        }
+
+        public downloadSpoolContent(parms: zosjobs.IDownloadAllSpoolContentParms): Promise<void> {
+            return zosjobs.DownloadJobs.downloadAllSpoolContentCommon(this.getSession(), parms);
+        }
+
+        public downloadSingleSpool(parms: zosjobs.IDownloadSpoolContentParms): Promise<void> {
+            return zosjobs.DownloadJobs.downloadSpoolContentCommon(this.getSession(), parms);
+        }
+
+        public getSpoolContentById(jobname: string, jobid: string, spoolId: number, encoding?: string): Promise<string> {
+            return zosjobs.GetJobs.getSpoolContentById(this.getSession(), jobname, jobid, spoolId, encoding);
+        }
+
+        public getJclForJob(job: zosjobs.IJob): Promise<string> {
+            return zosjobs.GetJobs.getJclCommon(this.getSession(), { ...job, encoding: this.profile?.profile?.encoding });
+        }
+
+        public submitJcl(jcl: string, internalReaderRecfm?: string, internalReaderLrecl?: string): Promise<zosjobs.IJob> {
+            const jesEncoding = this.profile?.profile?.jobEncoding;
+            return zosjobs.SubmitJobs.submitJcl(this.getSession(), jcl, internalReaderRecfm, internalReaderLrecl, jesEncoding);
+        }
+
+        public async submitJob(jobDataSet: string): Promise<zosjobs.IJob> {
+            if (this.profile?.profile?.jobEncoding == null) {
+                // Make single API call to submit if job encoding is not specified
+                return zosjobs.SubmitJobs.submitJob(this.getSession(), jobDataSet);
+            } else {
+                // Download JCL with `encoding` to perform codepage conversion with z/OSMF.
+                // Then submit as text with `jobEncoding` which is passed to JES reader.
+                const rawJcl = await zosfiles.Get.dataSet(this.getSession(), jobDataSet, { encoding: this.profile?.profile?.encoding });
+                return this.submitJcl(rawJcl.toString());
+            }
+        }
+
+        public async deleteJob(jobname: string, jobid: string): Promise<void> {
+            await zosjobs.DeleteJobs.deleteJob(this.getSession(), jobname, jobid);
+        }
+
+        public deleteJobWithInfo(jobname: string, jobid: string): Promise<undefined | zosjobs.IJobFeedback> {
+            return zosjobs.DeleteJobs.deleteJob(this.getSession(), jobname, jobid);
+        }
+
+        public async cancelJob(job: zosjobs.IJob): Promise<boolean> {
+            const session = this.getSession();
+            // use 1.0 so that all JES subsystems are supported out-of-the-box
+            const jobResult = await zosjobs.CancelJobs.cancelJobForJob(session, job, "2.0");
+            return jobResult.status === "0";
+        }
+        public supportSpoolPagination(): boolean {
+            return true;
+        }
     }
 
-    public hMigrateDataSet(dataSetName: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.HMigrate.dataSet(this.getSession(), dataSetName);
-    }
+    /**
+     * An implementation of the Zowe Explorer Command API interface for zOSMF.
+     */
+    export class CommandApi extends CommonApi implements MainframeInteraction.ICommand {
+        public issueTsoCommandWithParms(command: string, parms: zostso.IStartTsoParms, useNewTsoApis?: boolean): Promise<zostso.IIssueResponse> {
+            if (useNewTsoApis) {
+                return zostso.IssueTso.issueTsoCmd(this.getSession(), command, { addressSpaceOptions: parms });
+            }
 
-    public hRecallDataSet(dataSetName: string): Promise<zowe.IZosFilesResponse> {
-        return zowe.HRecall.dataSet(this.getSession(), dataSetName);
-    }
+            // eslint-disable-next-line deprecation/deprecation
+            return zostso.IssueTso.issueTsoCommand(this.getSession(), parms.account, command, parms);
+        }
 
-    public deleteDataSet(dataSetName: string, options?: zowe.IDeleteDatasetOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.Delete.dataSet(this.getSession(), dataSetName, options);
-    }
+        public issueMvsCommand(command: string, consoleName?: string): Promise<zosconsole.IConsoleResponse> {
+            return zosconsole.IssueCommand.issue(this.getSession(), { command, consoleName, processResponses: true });
+        }
 
-    public dataSetsMatchingPattern(filter: string[], options?: zowe.IDsmListOptions): Promise<zowe.IZosFilesResponse> {
-        return zowe.List.dataSetsMatchingPattern(this.getSession(), filter, options);
-    }
-    public copyDataSet(fromDataSetName: string, toDataSetName: string, enq?: string, replace?: boolean): Promise<zowe.IZosFilesResponse> {
-        return zowe.Copy.dataSet(this.getSession(), { dsn: toDataSetName }, { "from-dataset": { dsn: fromDataSetName }, enq, replace });
-    }
-}
+        public async issueUnixCommand(command: string, cwd: string, sshSession: zosuss.SshSession): Promise<string> {
+            let stdout = "";
+            if (cwd) {
+                await zosuss.Shell.executeSshCwd(
+                    sshSession,
+                    command,
+                    '"' + cwd + '"',
+                    (data: string) => {
+                        stdout += data;
+                    },
+                    true
+                );
+            } else {
+                await zosuss.Shell.executeSsh(
+                    sshSession,
+                    command,
+                    (data: string) => {
+                        stdout += data;
+                    },
+                    true
+                );
+            }
+            return stdout;
+        }
 
-/**
- * An implementation of the Zowe Explorer JES API interface for zOSMF.
- */
-export class ZosmfJesApi extends ZosmfApiCommon implements ZoweExplorerApi.IJes {
-    public getJobsByParameters(params: zowe.IGetJobsParms): Promise<zowe.IJob[]> {
-        return zowe.GetJobs.getJobsByParameters(this.getSession(), params);
-    }
-
-    public getJobsByOwnerAndPrefix(owner: string, prefix: string): Promise<zowe.IJob[]> {
-        return zowe.GetJobs.getJobsByOwnerAndPrefix(this.getSession(), owner, prefix);
-    }
-
-    public getJob(jobid: string): Promise<zowe.IJob> {
-        return zowe.GetJobs.getJob(this.getSession(), jobid);
-    }
-
-    public getSpoolFiles(jobname: string, jobid: string): Promise<zowe.IJobFile[]> {
-        return zowe.GetJobs.getSpoolFiles(this.getSession(), jobname, jobid);
-    }
-
-    public downloadSpoolContent(parms: zowe.IDownloadAllSpoolContentParms): Promise<void> {
-        return zowe.DownloadJobs.downloadAllSpoolContentCommon(this.getSession(), parms);
-    }
-
-    public downloadSingleSpool(parms: zowe.IDownloadSpoolContentParms): Promise<void> {
-        return zowe.DownloadJobs.downloadSpoolContentCommon(this.getSession(), parms);
-    }
-
-    public getSpoolContentById(jobname: string, jobid: string, spoolId: number): Promise<string> {
-        return zowe.GetJobs.getSpoolContentById(this.getSession(), jobname, jobid, spoolId);
-    }
-
-    public getJclForJob(job: zowe.IJob): Promise<string> {
-        return zowe.GetJobs.getJclForJob(this.getSession(), job);
-    }
-
-    public submitJcl(jcl: string, internalReaderRecfm?: string, internalReaderLrecl?: string): Promise<zowe.IJob> {
-        return zowe.SubmitJobs.submitJcl(this.getSession(), jcl, internalReaderRecfm, internalReaderLrecl);
-    }
-
-    public submitJob(jobDataSet: string): Promise<zowe.IJob> {
-        return zowe.SubmitJobs.submitJob(this.getSession(), jobDataSet);
-    }
-
-    public async deleteJob(jobname: string, jobid: string): Promise<void> {
-        await zowe.DeleteJobs.deleteJob(this.getSession(), jobname, jobid);
-    }
-
-    public deleteJobWithInfo(jobname: string, jobid: string): Promise<undefined | zowe.IJobFeedback> {
-        return zowe.DeleteJobs.deleteJob(this.getSession(), jobname, jobid);
-    }
-
-    public async cancelJob(job: zowe.IJob): Promise<boolean> {
-        const session = this.getSession();
-        // use 1.0 so that all JES subsystems are supported out-of-the-box
-        const jobResult = await zowe.CancelJobs.cancelJobForJob(session, job, "2.0");
-        return jobResult.status === "0";
-    }
-}
-
-/**
- * An implementation of the Zowe Explorer Command API interface for zOSMF.
- */
-export class ZosmfCommandApi extends ZosmfApiCommon implements ZoweExplorerApi.ICommand {
-    public issueTsoCommand(command: string, acctNum: string): Promise<zowe.IIssueResponse> {
-        return zowe.IssueTso.issueTsoCommand(this.getSession(), acctNum, command);
-    }
-
-    public issueTsoCommandWithParms(command: string, parms: zowe.IStartTsoParms): Promise<zowe.IIssueResponse> {
-        return zowe.IssueTso.issueTsoCommand(this.getSession(), parms.account, command, parms);
-    }
-
-    public issueMvsCommand(command: string): Promise<zowe.IConsoleResponse> {
-        return zowe.IssueCommand.issueSimple(this.getSession(), command);
+        public sshProfileRequired?(): boolean {
+            return true;
+        }
     }
 }

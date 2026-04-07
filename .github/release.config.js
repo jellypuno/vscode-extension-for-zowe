@@ -3,21 +3,26 @@ module.exports = {
         {
             name: "main",
             channel: "latest",
-            level: "minor",
-        },
-        {
-            name: "maintenance",
-            channel: "latest",
-            level: "patch",
+            level: "minor"
         },
         {
             name: "v1-lts",
             channel: "zowe-v1-lts",
-            level: "patch",
+            level: "patch"
         },
+        {
+            name: "v2-lts",
+            channel: "zowe-v2-lts",
+            level: "patch"
+        },
+        {
+            name: "release/3.*",
+            channel: "latest",
+            level: "minor"
+        }
         // {
         //     name: "next",
-        //     prerelease: true,
+        //     prerelease: true
         // }
     ],
     plugins: [
@@ -26,7 +31,7 @@ module.exports = {
             {
                 displayNames: {
                     "zowe-explorer": "Zowe Explorer",
-                    "zowe-explorer-ftp-extension": "Zowe Explorer Extension for FTP",
+                    "zowe-explorer-ftp-extension": "IBM z/OS FTP for Zowe Explorer",
                     "zowe-explorer-api": "Zowe Explorer APIs",
                 },
                 headerLine: "## TBD Release",
@@ -44,7 +49,7 @@ module.exports = {
             {
                 $cwd: "packages/zowe-explorer-api",
                 aliasTags: {
-                    "latest": ["zowe-v2-lts"],
+                    "latest": ["zowe-v3-lts"],
                 },
                 npmPublish: true,
                 tarballDir: "dist",
